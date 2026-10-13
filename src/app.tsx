@@ -128,55 +128,7 @@ function formatTokens(tokens: number): string {
 }
 
 export function App() {
-  // Starting balance preference in SOL (default 10 SOL)
-  const [startingBalance, setStartingBalance] = useState<number>(() => {
-    const saved = localStorage.getItem('pm_starting_balance_sol');
-    if (saved) return parseFloat(saved);
-    const oldUsd = localStorage.getItem('pm_starting_balance');
-    if (oldUsd) {
-      const num = parseFloat(oldUsd);
-      return Math.round((num / 150) * 100) / 100;
-    }
-    return 10;
-  });
-
-  // Persistent Virtual Balance held natively in SOL (default 10 SOL)
-  const [balance, setBalance] = useState<number>(() => {
-    const saved = localStorage.getItem('pm_balance_sol');
-    if (saved) return parseFloat(saved);
-    const oldUsd = localStorage.getItem('pm_balance');
-    if (oldUsd) {
-      const num = parseFloat(oldUsd);
-      const converted = Math.round((num / 150) * 1000) / 1000;
-      return converted > 0 ? converted : 10;
-    }
-    return 10;
-  });
-
-  const [showBalanceModal, setShowBalanceModal] = useState<boolean>(false);
-  const [customBalanceInput, setCustomBalanceInput] = useState<string>('10');
-
-  // Persistent Positions per mint: { [mint]: Position }
-  const [positions, setPositions] = useState<Record<string, Position>>(() => {
-    try {
-      const saved = localStorage.getItem('pm_positions');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-
-  // Persistent Trade History
-  const [tradeHistory, setTradeHistory] = useState<TradeLog[]>(() => {
-    try {
-      const saved = localStorage.getItem('pm_trades');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  // Multiple Wallets Management
+  // Multiple Wallets Management - canonical wallets list
   const [wallets, setWallets] = useState<WalletAccount[]>(() => {
     try {
       const saved = localStorage.getItem('pm_wallets');
@@ -230,6 +182,98 @@ export function App() {
     return wallets.find((w) => w.id === activeWalletId) || wallets[0];
   }, [wallets, activeWalletId]);
 
+  // Persistent Virtual Balance held natively in SOL (derived from active wallet)
+  const [balance, setBalance] = useState<number>(() => {
+    try {
+      const savedWallets = localStorage.getItem('pm_wallets');
+      const activeId = localStorage.getItem('pm_active_wallet_id') || 'w_default';
+      if (savedWallets) {
+        const parsed = JSON.parse(savedWallets);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const matched = parsed.find((w: any) => w.id === activeId) || parsed[0];
+          if (matched && typeof matched.balance === 'number') return matched.balance;
+        }
+      }
+    } catch {}
+    const saved = localStorage.getItem('pm_balance_sol');
+    if (saved) return parseFloat(saved);
+    const oldUsd = localStorage.getItem('pm_balance');
+    if (oldUsd) {
+      const num = parseFloat(oldUsd);
+      const converted = Math.round((num / 150) * 1000) / 1000;
+      return converted > 0 ? converted : 10;
+    }
+    return 10;
+  });
+
+  // Starting balance preference in SOL
+  const [startingBalance, setStartingBalance] = useState<number>(() => {
+    try {
+      const savedWallets = localStorage.getItem('pm_wallets');
+      const activeId = localStorage.getItem('pm_active_wallet_id') || 'w_default';
+      if (savedWallets) {
+        const parsed = JSON.parse(savedWallets);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const matched = parsed.find((w: any) => w.id === activeId) || parsed[0];
+          if (matched && typeof matched.startingBalance === 'number') return matched.startingBalance;
+        }
+      }
+    } catch {}
+    const saved = localStorage.getItem('pm_starting_balance_sol');
+    if (saved) return parseFloat(saved);
+    const oldUsd = localStorage.getItem('pm_starting_balance');
+    if (oldUsd) {
+      const num = parseFloat(oldUsd);
+      return Math.round((num / 150) * 100) / 100;
+    }
+    return 10;
+  });
+
+  const [showBalanceModal, setShowBalanceModal] = useState<boolean>(false);
+  const [customBalanceInput, setCustomBalanceInput] = useState<string>('10');
+
+  // Persistent Positions per mint: { [mint]: Position }
+  const [positions, setPositions] = useState<Record<string, Position>>(() => {
+    try {
+      const savedWallets = localStorage.getItem('pm_wallets');
+      const activeId = localStorage.getItem('pm_active_wallet_id') || 'w_default';
+      if (savedWallets) {
+        const parsed = JSON.parse(savedWallets);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const matched = parsed.find((w: any) => w.id === activeId) || parsed[0];
+          if (matched && matched.positions) return matched.positions;
+        }
+      }
+    } catch {}
+    try {
+      const saved = localStorage.getItem('pm_positions');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Persistent Trade History
+  const [tradeHistory, setTradeHistory] = useState<TradeLog[]>(() => {
+    try {
+      const savedWallets = localStorage.getItem('pm_wallets');
+      const activeId = localStorage.getItem('pm_active_wallet_id') || 'w_default';
+      if (savedWallets) {
+        const parsed = JSON.parse(savedWallets);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const matched = parsed.find((w: any) => w.id === activeId) || parsed[0];
+          if (matched && Array.isArray(matched.tradeHistory)) return matched.tradeHistory;
+        }
+      }
+    } catch {}
+    try {
+      const saved = localStorage.getItem('pm_trades');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   // Active token mint & metadata
   const [mint, setMint] = useState<string>('');
   const [pairData, setPairData] = useState<DexPair | null>(null);
@@ -256,12 +300,38 @@ export function App() {
   const [positionPrices, setPositionPrices] = useState<Record<string, number>>({});
   const positionPricesRef = useRef<Record<string, number>>({});
   const positionsRef = useRef<Record<string, Position>>(positions);
+  const tradeHistoryRef = useRef<TradeLog[]>(tradeHistory);
+  const balanceRef = useRef<number>(balance);
+  const startingBalanceRef = useRef<number>(startingBalance);
+  const walletsRef = useRef<WalletAccount[]>(wallets);
+  const activeWalletIdRef = useRef<string>(activeWalletId);
   const isStorageSyncingRef = useRef<boolean>(false);
+  const isSwitchingWalletRef = useRef<boolean>(false);
   const lastDexFetchRef = useRef<number>(0);
 
   useEffect(() => {
     positionsRef.current = positions;
   }, [positions]);
+
+  useEffect(() => {
+    tradeHistoryRef.current = tradeHistory;
+  }, [tradeHistory]);
+
+  useEffect(() => {
+    balanceRef.current = balance;
+  }, [balance]);
+
+  useEffect(() => {
+    startingBalanceRef.current = startingBalance;
+  }, [startingBalance]);
+
+  useEffect(() => {
+    walletsRef.current = wallets;
+  }, [wallets]);
+
+  useEffect(() => {
+    activeWalletIdRef.current = activeWalletId;
+  }, [activeWalletId]);
 
   // Live SOL/USD price tracking (default fallback to 150)
   const [solPriceUsd, setSolPriceUsd] = useState<number>(() => {
@@ -382,62 +452,107 @@ export function App() {
   useEffect(() => {
     if (typeof chrome === 'undefined') return;
 
-    // 1. Initial hydration from canonical chrome.storage.local (replaces any stale localStorage)
+    // 1. Initial hydration from canonical chrome.storage.local
     if (chrome.storage?.local) {
-      chrome.storage.local.get(['pm_balance_sol', 'pm_starting_balance_sol', 'pm_positions', 'pm_trades', 'pm_wallets', 'pm_active_wallet_id'], (res) => {
-        if (chrome.runtime.lastError || !res) return;
+      chrome.storage.local.get(['pm_wallets', 'pm_active_wallet_id'], (res) => {
+        if (chrome.runtime.lastError || !res || isSwitchingWalletRef.current) return;
         isStorageSyncingRef.current = true;
-        if (res.pm_balance_sol !== undefined) {
-          setBalance(Number(res.pm_balance_sol));
-        }
-        if (res.pm_starting_balance_sol !== undefined) {
-          setStartingBalance(Number(res.pm_starting_balance_sol));
-        }
-        if (res.pm_positions) {
-          setPositions(res.pm_positions as Record<string, Position>);
-        }
-        if (res.pm_trades) {
-          setTradeHistory(res.pm_trades as TradeLog[]);
-        }
+
+        let loadedWallets = walletsRef.current;
         if (Array.isArray(res.pm_wallets) && res.pm_wallets.length > 0) {
-          setWallets(res.pm_wallets as WalletAccount[]);
+          loadedWallets = res.pm_wallets as WalletAccount[];
+          walletsRef.current = loadedWallets;
+          setWallets(loadedWallets);
         }
-        if (res.pm_active_wallet_id) {
-          setActiveWalletId(res.pm_active_wallet_id as string);
+
+        let loadedActiveId = activeWalletIdRef.current;
+        if (res.pm_active_wallet_id && loadedWallets.some((w) => w.id === res.pm_active_wallet_id)) {
+          loadedActiveId = res.pm_active_wallet_id as string;
+        } else if (!loadedWallets.some((w) => w.id === loadedActiveId) && loadedWallets[0]) {
+          loadedActiveId = loadedWallets[0].id;
         }
+        activeWalletIdRef.current = loadedActiveId;
+        setActiveWalletId(loadedActiveId);
+
+        const activeW = loadedWallets.find((w) => w.id === loadedActiveId) || loadedWallets[0];
+        if (activeW) {
+          balanceRef.current = activeW.balance;
+          startingBalanceRef.current = activeW.startingBalance;
+          positionsRef.current = activeW.positions || {};
+          tradeHistoryRef.current = activeW.tradeHistory || [];
+
+          setBalance(activeW.balance);
+          setStartingBalance(activeW.startingBalance);
+          setPositions(activeW.positions || {});
+          setTradeHistory(activeW.tradeHistory || []);
+        }
+
         setTimeout(() => {
           isStorageSyncingRef.current = false;
-        }, 150);
+        }, 100);
       });
     }
 
     // 2. Real-time storage change listener
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
-      if (areaName !== 'local') return;
-      isStorageSyncingRef.current = true;
+      if (areaName !== 'local' || isSwitchingWalletRef.current) return;
 
-      if (changes.pm_balance_sol && changes.pm_balance_sol.newValue !== undefined) {
-        setBalance(Number(changes.pm_balance_sol.newValue));
-      }
-      if (changes.pm_starting_balance_sol && changes.pm_starting_balance_sol.newValue !== undefined) {
-        setStartingBalance(Number(changes.pm_starting_balance_sol.newValue));
-      }
-      if (changes.pm_positions && changes.pm_positions.newValue) {
-        setPositions(changes.pm_positions.newValue as Record<string, Position>);
-      }
-      if (changes.pm_trades && changes.pm_trades.newValue) {
-        setTradeHistory(changes.pm_trades.newValue as TradeLog[]);
-      }
       if (changes.pm_wallets && Array.isArray(changes.pm_wallets.newValue)) {
-        setWallets(changes.pm_wallets.newValue as WalletAccount[]);
-      }
-      if (changes.pm_active_wallet_id && changes.pm_active_wallet_id.newValue) {
-        setActiveWalletId(changes.pm_active_wallet_id.newValue as string);
+        const newWallets = changes.pm_wallets.newValue as WalletAccount[];
+        const currentJson = JSON.stringify(walletsRef.current);
+        const newJson = JSON.stringify(newWallets);
+        if (currentJson !== newJson) {
+          isStorageSyncingRef.current = true;
+          walletsRef.current = newWallets;
+          setWallets(newWallets);
+
+          const activeW = newWallets.find((w) => w.id === activeWalletIdRef.current);
+          if (activeW) {
+            if (activeW.balance !== balanceRef.current) {
+              balanceRef.current = activeW.balance;
+              setBalance(activeW.balance);
+            }
+            if (activeW.startingBalance !== startingBalanceRef.current) {
+              startingBalanceRef.current = activeW.startingBalance;
+              setStartingBalance(activeW.startingBalance);
+            }
+            if (JSON.stringify(activeW.positions || {}) !== JSON.stringify(positionsRef.current)) {
+              positionsRef.current = activeW.positions || {};
+              setPositions(activeW.positions || {});
+            }
+            if (JSON.stringify(activeW.tradeHistory || []) !== JSON.stringify(tradeHistoryRef.current)) {
+              tradeHistoryRef.current = activeW.tradeHistory || [];
+              setTradeHistory(activeW.tradeHistory || []);
+            }
+          }
+          setTimeout(() => {
+            isStorageSyncingRef.current = false;
+          }, 100);
+        }
       }
 
-      setTimeout(() => {
-        isStorageSyncingRef.current = false;
-      }, 150);
+      if (changes.pm_active_wallet_id && changes.pm_active_wallet_id.newValue && changes.pm_active_wallet_id.newValue !== activeWalletIdRef.current) {
+        const newId = changes.pm_active_wallet_id.newValue as string;
+        const target = walletsRef.current.find((w) => w.id === newId);
+        if (target) {
+          isStorageSyncingRef.current = true;
+          activeWalletIdRef.current = target.id;
+          balanceRef.current = target.balance;
+          startingBalanceRef.current = target.startingBalance;
+          positionsRef.current = target.positions || {};
+          tradeHistoryRef.current = target.tradeHistory || [];
+
+          setActiveWalletId(target.id);
+          setBalance(target.balance);
+          setStartingBalance(target.startingBalance);
+          setPositions(target.positions || {});
+          setTradeHistory(target.tradeHistory || []);
+
+          setTimeout(() => {
+            isStorageSyncingRef.current = false;
+          }, 100);
+        }
+      }
     };
 
     if (chrome.storage?.onChanged) {
@@ -446,30 +561,63 @@ export function App() {
 
     // 3. Native window storage event for instant cross-tab sync
     const handleWindowStorage = (e: StorageEvent) => {
-      if (!e.newValue) return;
-      isStorageSyncingRef.current = true;
-      if (e.key === 'pm_balance_sol') {
-        setBalance(parseFloat(e.newValue));
-      } else if (e.key === 'pm_starting_balance_sol') {
-        setStartingBalance(parseFloat(e.newValue));
-      } else if (e.key === 'pm_positions') {
+      if (!e.newValue || isSwitchingWalletRef.current) return;
+      if (e.key === 'pm_wallets') {
         try {
-          setPositions(JSON.parse(e.newValue));
+          const newWallets = JSON.parse(e.newValue);
+          if (Array.isArray(newWallets)) {
+            const currentJson = JSON.stringify(walletsRef.current);
+            if (currentJson !== e.newValue) {
+              isStorageSyncingRef.current = true;
+              walletsRef.current = newWallets;
+              setWallets(newWallets);
+
+              const activeW = newWallets.find((w: WalletAccount) => w.id === activeWalletIdRef.current);
+              if (activeW) {
+                if (activeW.balance !== balanceRef.current) {
+                  balanceRef.current = activeW.balance;
+                  setBalance(activeW.balance);
+                }
+                if (activeW.startingBalance !== startingBalanceRef.current) {
+                  startingBalanceRef.current = activeW.startingBalance;
+                  setStartingBalance(activeW.startingBalance);
+                }
+                if (JSON.stringify(activeW.positions || {}) !== JSON.stringify(positionsRef.current)) {
+                  positionsRef.current = activeW.positions || {};
+                  setPositions(activeW.positions || {});
+                }
+                if (JSON.stringify(activeW.tradeHistory || []) !== JSON.stringify(tradeHistoryRef.current)) {
+                  tradeHistoryRef.current = activeW.tradeHistory || [];
+                  setTradeHistory(activeW.tradeHistory || []);
+                }
+              }
+              setTimeout(() => {
+                isStorageSyncingRef.current = false;
+              }, 100);
+            }
+          }
         } catch {}
-      } else if (e.key === 'pm_trades') {
-        try {
-          setTradeHistory(JSON.parse(e.newValue));
-        } catch {}
-      } else if (e.key === 'pm_wallets') {
-        try {
-          setWallets(JSON.parse(e.newValue));
-        } catch {}
-      } else if (e.key === 'pm_active_wallet_id') {
-        setActiveWalletId(e.newValue);
+      } else if (e.key === 'pm_active_wallet_id' && e.newValue !== activeWalletIdRef.current) {
+        const target = walletsRef.current.find((w) => w.id === e.newValue);
+        if (target) {
+          isStorageSyncingRef.current = true;
+          activeWalletIdRef.current = target.id;
+          balanceRef.current = target.balance;
+          startingBalanceRef.current = target.startingBalance;
+          positionsRef.current = target.positions || {};
+          tradeHistoryRef.current = target.tradeHistory || [];
+
+          setActiveWalletId(target.id);
+          setBalance(target.balance);
+          setStartingBalance(target.startingBalance);
+          setPositions(target.positions || {});
+          setTradeHistory(target.tradeHistory || []);
+
+          setTimeout(() => {
+            isStorageSyncingRef.current = false;
+          }, 100);
+        }
       }
-      setTimeout(() => {
-        isStorageSyncingRef.current = false;
-      }, 150);
     };
     window.addEventListener('storage', handleWindowStorage);
 
@@ -481,31 +629,35 @@ export function App() {
     };
   }, []);
 
-  // Save balance and positions to localStorage and chrome.storage.local (guarded against echo writes)
+  // Save balance and positions to localStorage and chrome.storage.local (guarded against echo writes and active wallet switching)
   useEffect(() => {
+    balanceRef.current = balance;
     localStorage.setItem('pm_balance_sol', balance.toString());
-    if (!isStorageSyncingRef.current) {
+    if (!isStorageSyncingRef.current && !isSwitchingWalletRef.current) {
       chrome.storage?.local?.set({ pm_balance_sol: balance }).catch(() => {});
     }
   }, [balance]);
 
   useEffect(() => {
+    startingBalanceRef.current = startingBalance;
     localStorage.setItem('pm_starting_balance_sol', startingBalance.toString());
-    if (!isStorageSyncingRef.current) {
+    if (!isStorageSyncingRef.current && !isSwitchingWalletRef.current) {
       chrome.storage?.local?.set({ pm_starting_balance_sol: startingBalance }).catch(() => {});
     }
   }, [startingBalance]);
 
   useEffect(() => {
+    positionsRef.current = positions;
     localStorage.setItem('pm_positions', JSON.stringify(positions));
-    if (!isStorageSyncingRef.current) {
+    if (!isStorageSyncingRef.current && !isSwitchingWalletRef.current) {
       chrome.storage?.local?.set({ pm_positions: positions }).catch(() => {});
     }
   }, [positions]);
 
   useEffect(() => {
+    tradeHistoryRef.current = tradeHistory;
     localStorage.setItem('pm_trades', JSON.stringify(tradeHistory));
-    if (!isStorageSyncingRef.current) {
+    if (!isStorageSyncingRef.current && !isSwitchingWalletRef.current) {
       chrome.storage?.local?.set({ pm_trades: tradeHistory }).catch(() => {});
     }
   }, [tradeHistory]);
@@ -536,24 +688,36 @@ export function App() {
 
   // Persist wallets list and activeWalletId
   useEffect(() => {
+    walletsRef.current = wallets;
     localStorage.setItem('pm_wallets', JSON.stringify(wallets));
-    if (!isStorageSyncingRef.current) {
+    if (!isStorageSyncingRef.current && !isSwitchingWalletRef.current) {
       chrome.storage?.local?.set({ pm_wallets: wallets }).catch(() => {});
     }
   }, [wallets]);
 
   useEffect(() => {
+    activeWalletIdRef.current = activeWalletId;
     localStorage.setItem('pm_active_wallet_id', activeWalletId);
-    if (!isStorageSyncingRef.current) {
+    if (!isStorageSyncingRef.current && !isSwitchingWalletRef.current) {
       chrome.storage?.local?.set({ pm_active_wallet_id: activeWalletId }).catch(() => {});
     }
   }, [activeWalletId]);
 
   // Keep the active wallet object updated with the current balance, starting balance, positions, and trades
   useEffect(() => {
-    if (isStorageSyncingRef.current) return;
-    setWallets((prev) =>
-      prev.map((w) =>
+    if (isStorageSyncingRef.current || isSwitchingWalletRef.current) return;
+    setWallets((prev) => {
+      const active = prev.find((w) => w.id === activeWalletId);
+      if (!active) return prev;
+      if (
+        active.balance === balance &&
+        active.startingBalance === startingBalance &&
+        active.positions === positions &&
+        active.tradeHistory === tradeHistory
+      ) {
+        return prev;
+      }
+      return prev.map((w) =>
         w.id === activeWalletId
           ? {
               ...w,
@@ -563,8 +727,8 @@ export function App() {
               tradeHistory,
             }
           : w
-      )
-    );
+      );
+    });
   }, [balance, startingBalance, positions, tradeHistory, activeWalletId]);
 
   // Helper to extract Solana address from URL
@@ -843,40 +1007,8 @@ export function App() {
       }
     };
 
-    const reloadStorageData = () => {
-      if (typeof chrome === 'undefined' || !chrome.storage?.local) return;
-      chrome.storage.local.get(['pm_balance_sol', 'pm_starting_balance_sol', 'pm_positions', 'pm_trades'], (res) => {
-        if (chrome.runtime.lastError || !res) return;
-        isStorageSyncingRef.current = true;
-        if (res.pm_balance_sol !== undefined) {
-          setBalance((prev) => (prev === Number(res.pm_balance_sol) ? prev : Number(res.pm_balance_sol)));
-        }
-        if (res.pm_starting_balance_sol !== undefined) {
-          setStartingBalance((prev) => (prev === Number(res.pm_starting_balance_sol) ? prev : Number(res.pm_starting_balance_sol)));
-        }
-        if (res.pm_positions) {
-          setPositions((prev) => {
-            const pStr = JSON.stringify(prev);
-            const nStr = JSON.stringify(res.pm_positions);
-            return pStr === nStr ? prev : (res.pm_positions as Record<string, Position>);
-          });
-        }
-        if (res.pm_trades) {
-          setTradeHistory((prev) => {
-            const pStr = JSON.stringify(prev);
-            const nStr = JSON.stringify(res.pm_trades);
-            return pStr === nStr ? prev : (res.pm_trades as TradeLog[]);
-          });
-        }
-        setTimeout(() => {
-          isStorageSyncingRef.current = false;
-        }, 150);
-      });
-    };
-
     const handleTabActivated = (activeInfo: { tabId: number }) => {
       activeTabIdRef.current = activeInfo.tabId;
-      reloadStorageData();
       chrome.tabs.get(activeInfo.tabId, (tab) => {
         if (chrome.runtime.lastError || !tab) {
           refreshActiveTab();
@@ -887,7 +1019,6 @@ export function App() {
     };
 
     const handleWindowFocus = (_windowId: number) => {
-      reloadStorageData();
       refreshActiveTab();
     };
 
@@ -1759,70 +1890,120 @@ export function App() {
   };
 
   // Wallet Manager Handlers
-  const handleSwitchWallet = (targetWalletId: string) => {
-    if (targetWalletId === activeWalletId) return;
-    const target = wallets.find((w) => w.id === targetWalletId);
+  const handleSwitchWallet = (targetWalletId: string, customWalletsList?: WalletAccount[]) => {
+    const currentWallets = customWalletsList || walletsRef.current;
+    const target = currentWallets.find((w) => w.id === targetWalletId);
     if (!target) return;
 
-    isStorageSyncingRef.current = true;
+    // Prevent background sync or storage echoes from clobbering this switch
+    isSwitchingWalletRef.current = true;
+
+    // Save active wallet changes into the list before switching away
+    const updatedWallets = currentWallets.map((w) => {
+      if (w.id === activeWalletIdRef.current && w.id !== targetWalletId) {
+        return {
+          ...w,
+          balance: balanceRef.current,
+          startingBalance: startingBalanceRef.current,
+          positions: positionsRef.current,
+          tradeHistory: tradeHistoryRef.current,
+        };
+      }
+      return w;
+    });
+
+    walletsRef.current = updatedWallets;
+    activeWalletIdRef.current = target.id;
+    balanceRef.current = target.balance;
+    startingBalanceRef.current = target.startingBalance;
+    positionsRef.current = target.positions || {};
+    tradeHistoryRef.current = target.tradeHistory || [];
+
+    setWallets(updatedWallets);
     setActiveWalletId(target.id);
     setBalance(target.balance);
     setStartingBalance(target.startingBalance);
     setPositions(target.positions || {});
     setTradeHistory(target.tradeHistory || []);
 
+    // Synchronously write to localStorage
+    localStorage.setItem('pm_active_wallet_id', target.id);
+    localStorage.setItem('pm_wallets', JSON.stringify(updatedWallets));
+    localStorage.setItem('pm_balance_sol', target.balance.toString());
+    localStorage.setItem('pm_starting_balance_sol', target.startingBalance.toString());
+    localStorage.setItem('pm_positions', JSON.stringify(target.positions || {}));
+    localStorage.setItem('pm_trades', JSON.stringify(target.tradeHistory || []));
+
+    // Persist to chrome.storage.local
+    if (chrome.storage?.local) {
+      chrome.storage.local.set({
+        pm_active_wallet_id: target.id,
+        pm_wallets: updatedWallets,
+        pm_balance_sol: target.balance,
+        pm_starting_balance_sol: target.startingBalance,
+        pm_positions: target.positions || {},
+        pm_trades: target.tradeHistory || [],
+      }).catch(() => {});
+    }
+
     setTimeout(() => {
-      isStorageSyncingRef.current = false;
-    }, 100);
+      isSwitchingWalletRef.current = false;
+    }, 200);
 
     flashToast(`Switched to "${target.name}"`);
   };
 
   const handleCreateWallet = (name: string, initialBalance: number) => {
     const newId = `w_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const cleanBal = initialBalance > 0 ? initialBalance : 10;
     const newWallet: WalletAccount = {
       id: newId,
-      name: name.trim() || `Wallet ${wallets.length + 1}`,
+      name: name.trim() || `Wallet ${walletsRef.current.length + 1}`,
       address: generateSimulatedSolanaAddress(),
-      balance: initialBalance > 0 ? initialBalance : 10,
-      startingBalance: initialBalance > 0 ? initialBalance : 10,
+      balance: cleanBal,
+      startingBalance: cleanBal,
       positions: {},
       tradeHistory: [],
       createdAt: Date.now(),
     };
 
-    setWallets((prev) => [...prev, newWallet]);
-    handleSwitchWallet(newId);
+    const nextWallets = [...walletsRef.current, newWallet];
+    handleSwitchWallet(newId, nextWallets);
     flashToast(`Created wallet "${newWallet.name}"`);
   };
 
   const handleRenameWallet = (id: string, newName: string) => {
     const clean = newName.trim();
     if (!clean) return;
-    setWallets((prev) => prev.map((w) => (w.id === id ? { ...w, name: clean } : w)));
+    const updated = walletsRef.current.map((w) => (w.id === id ? { ...w, name: clean } : w));
+    walletsRef.current = updated;
+    setWallets(updated);
+    localStorage.setItem('pm_wallets', JSON.stringify(updated));
+    chrome.storage?.local?.set({ pm_wallets: updated }).catch(() => {});
     flashToast(`Renamed wallet to "${clean}"`);
   };
 
   const handleDeleteWallet = (id: string) => {
-    if (wallets.length <= 1) {
+    if (walletsRef.current.length <= 1) {
       flashToast('Cannot delete the only wallet');
       return;
     }
-    const target = wallets.find((w) => w.id === id);
-    if (!confirm(`Delete wallet "${target?.name || 'Wallet'}"? This cannot be undone.`)) return;
+    const target = walletsRef.current.find((w) => w.id === id);
+    const remaining = walletsRef.current.filter((w) => w.id !== id);
 
-    const remaining = wallets.filter((w) => w.id !== id);
-    setWallets(remaining);
-
-    if (id === activeWalletId) {
-      const nextWallet = remaining[0];
-      handleSwitchWallet(nextWallet.id);
+    if (id === activeWalletIdRef.current) {
+      handleSwitchWallet(remaining[0].id, remaining);
+    } else {
+      walletsRef.current = remaining;
+      setWallets(remaining);
+      localStorage.setItem('pm_wallets', JSON.stringify(remaining));
+      chrome.storage?.local?.set({ pm_wallets: remaining }).catch(() => {});
     }
     flashToast(`Deleted wallet "${target?.name || 'Wallet'}"`);
   };
 
   const handleExportWallet = (id: string) => {
-    const target = wallets.find((w) => w.id === id);
+    const target = walletsRef.current.find((w) => w.id === id);
     if (!target) return;
 
     try {
@@ -1856,8 +2037,8 @@ export function App() {
         version: '2.0.0',
         type: 'paper_meme_all_wallets',
         exportedAt: new Date().toISOString(),
-        activeWalletId,
-        wallets,
+        activeWalletId: activeWalletIdRef.current,
+        wallets: walletsRef.current,
         buyPresetGroups: presetGroups,
         activeBuyGroupId: activeGroupId,
         sellPresetGroups,
@@ -1874,7 +2055,7 @@ export function App() {
       downloadAnchor.click();
       downloadAnchor.remove();
 
-      flashToast(`Exported all ${wallets.length} wallets`);
+      flashToast(`Exported all ${walletsRef.current.length} wallets`);
     } catch {
       flashToast('Failed to export all wallets');
     }
@@ -1892,15 +2073,8 @@ export function App() {
 
         // Case 1: Full multi-wallet backup
         if (data.type === 'paper_meme_all_wallets' && Array.isArray(data.wallets) && data.wallets.length > 0) {
-          isStorageSyncingRef.current = true;
-          setWallets(data.wallets);
           const activeId = data.activeWalletId || data.wallets[0].id;
-          setActiveWalletId(activeId);
-          const activeW = data.wallets.find((w: WalletAccount) => w.id === activeId) || data.wallets[0];
-          setBalance(activeW.balance);
-          setStartingBalance(activeW.startingBalance);
-          setPositions(activeW.positions || {});
-          setTradeHistory(activeW.tradeHistory || []);
+          handleSwitchWallet(activeId, data.wallets);
 
           if (Array.isArray(data.buyPresetGroups) && data.buyPresetGroups.length > 0) setPresetGroups(data.buyPresetGroups);
           if (data.activeBuyGroupId) setActiveGroupId(data.activeBuyGroupId);
@@ -1908,10 +2082,6 @@ export function App() {
           if (data.activeSellGroupId) setActiveSellGroupId(data.activeSellGroupId);
           if (data.slippage) setSlippage(data.slippage);
           if (data.priorityFee) setPriorityFee(data.priorityFee);
-
-          setTimeout(() => {
-            isStorageSyncingRef.current = false;
-          }, 150);
 
           flashToast(`Imported ${data.wallets.length} wallets`);
           setShowWalletManager(false);
@@ -1922,19 +2092,21 @@ export function App() {
         if (data.type === 'paper_meme_single_wallet' && data.wallet && typeof data.wallet === 'object') {
           const w = data.wallet;
           const newId = `w_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          const importedBal = typeof w.balance === 'number' ? w.balance : 10;
+          const importedStartBal = typeof w.startingBalance === 'number' ? w.startingBalance : importedBal;
           const importedWallet: WalletAccount = {
             id: newId,
             name: `${w.name || 'Imported Wallet'} (Imported)`,
             address: w.address || generateSimulatedSolanaAddress(),
-            balance: typeof w.balance === 'number' ? w.balance : 10,
-            startingBalance: typeof w.startingBalance === 'number' ? w.startingBalance : 10,
-            positions: w.positions || {},
+            balance: importedBal,
+            startingBalance: importedStartBal,
+            positions: w.positions && typeof w.positions === 'object' ? w.positions : {},
             tradeHistory: Array.isArray(w.tradeHistory) ? w.tradeHistory : [],
             createdAt: Date.now(),
           };
 
-          setWallets((prev) => [...prev, importedWallet]);
-          handleSwitchWallet(newId);
+          const nextWallets = [...walletsRef.current, importedWallet];
+          handleSwitchWallet(newId, nextWallets);
           flashToast(`Imported wallet "${importedWallet.name}"`);
           setShowWalletManager(false);
           return;
@@ -1951,13 +2123,13 @@ export function App() {
             address: generateSimulatedSolanaAddress(),
             balance: importedBal,
             startingBalance: importedStartBal,
-            positions: data.positions || {},
+            positions: data.positions && typeof data.positions === 'object' ? data.positions : {},
             tradeHistory: Array.isArray(data.tradeHistory) ? data.tradeHistory : [],
             createdAt: Date.now(),
           };
 
-          setWallets((prev) => [...prev, importedWallet]);
-          handleSwitchWallet(newId);
+          const nextWallets = [...walletsRef.current, importedWallet];
+          handleSwitchWallet(newId, nextWallets);
 
           if (Array.isArray(data.buyPresetGroups) && data.buyPresetGroups.length > 0) setPresetGroups(data.buyPresetGroups);
           if (data.activeBuyGroupId) setActiveGroupId(data.activeBuyGroupId);
