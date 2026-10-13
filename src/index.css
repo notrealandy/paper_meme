@@ -1,0 +1,271 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --bg-app: #080a0f;
+  --bg-surface: #0e121a;
+  --bg-card: #131824;
+  --bg-card-hover: #192030;
+  --bg-input: #0a0d14;
+  --border-subtle: #1c2436;
+  --border-hover: #2a3650;
+  --border-active: #3b82f6;
+
+  --accent-green: #00f59b;
+  --accent-green-bg: rgba(0, 245, 155, 0.08);
+  --accent-green-border: rgba(0, 245, 155, 0.25);
+  --accent-green-hover: #0df294;
+  --accent-green-glow: 0 0 16px rgba(0, 245, 155, 0.35);
+
+  --accent-red: #ff3b69;
+  --accent-red-bg: rgba(255, 59, 105, 0.08);
+  --accent-red-border: rgba(255, 59, 105, 0.25);
+  --accent-red-hover: #fa2d5e;
+  --accent-red-glow: 0 0 16px rgba(255, 59, 105, 0.35);
+
+  --accent-cyan: #00d4ff;
+  --accent-purple: #9d4edd;
+  --accent-orange: #ff9100;
+  --accent-blue: #3b82f6;
+
+  --text-white: #ffffff;
+  --text-primary: #e5e9f0;
+  --text-secondary: #8a94a6;
+  --text-muted: #545e75;
+
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  user-select: none;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-app);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' on, 'zero' on;
+}
+
+/* Utility Animations */
+@keyframes pulseLive {
+  0% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 rgba(0, 245, 155, 0.7); }
+  70% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 5px rgba(0, 245, 155, 0); }
+  100% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 rgba(0, 245, 155, 0); }
+}
+
+@keyframes flashGreen {
+  0% { color: var(--accent-green); background-color: var(--accent-green-bg); }
+  100% { color: inherit; background-color: transparent; }
+}
+
+@keyframes flashRed {
+  0% { color: var(--accent-red); background-color: var(--accent-red-bg); }
+  100% { color: inherit; background-color: transparent; }
+}
+
+@keyframes slideInRight {
+  0% { transform: translateX(110%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  background-color: var(--accent-green);
+  border-radius: 50%;
+  animation: pulseLive 2s infinite;
+  display: inline-block;
+}
+
+.flash-up {
+  animation: flashGreen 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.flash-down {
+  animation: flashRed 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Interactive elements */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+input {
+  font-family: inherit;
+  outline: none;
+}
+
+/* Axiom Card Component */
+.ax-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 12px;
+  transition: border-color 0.2s;
+}
+
+.ax-card:hover {
+  border-color: var(--border-hover);
+}
+
+/* Axiom Pill Button */
+.ax-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.ax-badge-green {
+  background: var(--accent-green-bg);
+  border-color: var(--accent-green-border);
+  color: var(--accent-green);
+}
+
+.ax-badge-red {
+  background: var(--accent-red-bg);
+  border-color: var(--accent-red-border);
+  color: var(--accent-red);
+}
+
+/* Buy & Sell Buttons */
+.btn-buy {
+  background: linear-gradient(135deg, #00f59b 0%, #00c978 100%);
+  color: #05140b;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 12px rgba(0, 245, 155, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  letter-spacing: 0.3px;
+}
+
+.btn-buy:hover {
+  background: linear-gradient(135deg, #0df294 0%, #00da84 100%);
+  box-shadow: 0 4px 16px rgba(0, 245, 155, 0.4);
+}
+
+.btn-sell {
+  background: linear-gradient(135deg, #ff3b69 0%, #d81c47 100%);
+  color: #ffffff;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 12px rgba(255, 59, 105, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  letter-spacing: 0.3px;
+}
+
+.btn-sell:hover {
+  background: linear-gradient(135deg, #fa2d5e 0%, #ea1f4c 100%);
+  box-shadow: 0 4px 16px rgba(255, 59, 105, 0.4);
+}
+
+.btn-preset {
+  background: rgba(0, 245, 155, 0.06);
+  border: 1px solid rgba(0, 245, 155, 0.2);
+  color: var(--accent-green);
+  font-weight: 700;
+  font-size: 11px;
+  padding: 8px 4px;
+  border-radius: 6px;
+  text-align: center;
+  transition: all 0.12s ease;
+}
+
+.btn-preset:hover:not(:disabled) {
+  background: rgba(0, 245, 155, 0.18);
+  border-color: var(--accent-green);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(0, 245, 155, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-preset:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.btn-preset.active {
+  background: rgba(0, 245, 155, 0.25);
+  border-color: var(--accent-green);
+  color: #fff;
+}
+
+.btn-preset-sell {
+  background: rgba(255, 59, 105, 0.06);
+  border: 1px solid rgba(255, 59, 105, 0.2);
+  color: var(--accent-red);
+  font-weight: 700;
+  font-size: 11px;
+  padding: 8px 4px;
+  border-radius: 6px;
+  text-align: center;
+  transition: all 0.12s ease;
+}
+
+.btn-preset-sell:hover:not(:disabled) {
+  background: rgba(255, 59, 105, 0.18);
+  border-color: var(--accent-red);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(255, 59, 105, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-preset-sell:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}

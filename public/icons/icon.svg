@@ -1,0 +1,21 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Rounded dark background -->
+  <rect width="128" height="128" rx="28" fill="#0A0D14"/>
+  <rect x="1" y="1" width="126" height="126" rx="27" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+
+  <!-- Axiom geometric logo -->
+  <g transform="translate(14, 10) scale(2.8)">
+    <path d="M24.1384 17.3876H11.8623L18.0001 7.00012L24.1384 17.3876Z" fill="#FFFFFF"/>
+    <path d="M31 29.0003L5 29.0003L9.96764 20.5933L26.0324 20.5933L31 29.0003Z" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Green 'P' badge over the bottom-right corner -->
+  <g transform="translate(68, 66)">
+    <!-- Dark cutout separation -->
+    <rect x="-3" y="-3" width="58" height="58" rx="19" fill="#0A0D14"/>
+    <!-- Dark badge with bright neon green border -->
+    <rect x="0" y="0" width="52" height="52" rx="16" fill="#101520" stroke="#00FFA3" stroke-width="3"/>
+    <!-- Glowing green P -->
+    <text x="26" y="38" font-family="'JetBrains Mono', system-ui, sans-serif" font-size="34" font-weight="900" fill="#00FFA3" text-anchor="middle">P</text>
+  </g>
+</svg>
