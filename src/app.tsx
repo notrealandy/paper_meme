@@ -356,6 +356,10 @@ export function App() {
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'TRADE' | 'TRACKER' | 'HISTORY'>('TRADE');
   const [unreadTrackerCount, setUnreadTrackerCount] = useState<number>(0);
+  const currentAppTabRef = useRef<'TRADE' | 'TRACKER' | 'HISTORY'>('TRADE');
+  useEffect(() => {
+    currentAppTabRef.current = activeTab;
+  }, [activeTab]);
   const [showPositionsPopup, setShowPositionsPopup] = useState<boolean>(false);
   const [isPositionsPopupClosing, setIsPositionsPopupClosing] = useState<boolean>(false);
 
@@ -4588,8 +4592,8 @@ export function App() {
           </>
         )}
 
-        {/* VIEW 2: FULL-PAGE WALLET TRACKER */}
-        {activeTab === 'TRACKER' && (
+        {/* VIEW 2: FULL-PAGE WALLET TRACKER (KEPT MOUNTED TO RUN IN BACKGROUND ON ALL TABS) */}
+        <div style={{ display: activeTab === 'TRACKER' ? 'contents' : 'none' }}>
           <TrackerView
             solPriceUsd={solPriceUsd}
             onSelectToken={(selectedMint) => {
@@ -4599,12 +4603,12 @@ export function App() {
             }}
             flashToast={flashToast}
             onNewEventNotification={() => {
-              if (activeTab !== 'TRACKER') {
+              if (currentAppTabRef.current !== 'TRACKER') {
                 setUnreadTrackerCount((prev) => prev + 1);
               }
             }}
           />
-        )}
+        </div>
 
         {/* VIEW 3: FULL-PAGE HISTORY (STATS & FILLS) */}
         {activeTab === 'HISTORY' && (
