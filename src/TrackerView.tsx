@@ -1315,7 +1315,10 @@ export function hydrateLegacyEvents(rawEvents: TrackerTradeEvent[], fallbackSolP
 interface TrackerViewProps {
   solPriceUsd: number;
   onSelectToken: (mint: string) => void;
-  flashToast: (msg: string, duration?: number) => void;
+  flashToast: (
+    msgOrPayload: string | { message?: string; tradeEvent?: TrackerTradeEvent; type?: 'success' | 'info' | 'warn' | 'error' },
+    duration?: number
+  ) => void;
   onNewEventNotification?: (event: TrackerTradeEvent) => void;
 }
 
@@ -1736,8 +1739,11 @@ export function TrackerView({
     }
 
     flashToast(
-      `[TEST] ${sourceWallet.emoji || ''} ${sourceWallet.nickname}: ${type === 'BUY' ? 'Bought' : 'Sold'} ${solAmt} SOL of $${sampleToken.symbol}`,
-      4000
+      {
+        message: `[TEST] ${sourceWallet.emoji || ''} ${sourceWallet.nickname}: ${type === 'BUY' ? 'Bought' : 'Sold'} ${solAmt} SOL of $${sampleToken.symbol}`,
+        tradeEvent: newEvent,
+      },
+      5500
     );
 
     if (onNewEventNotification) {
@@ -1799,8 +1805,11 @@ export function TrackerView({
             }
 
             flashToast(
-              `${wallet.emoji || '🐋'} ${wallet.nickname}: ${tradeEvent.type === 'BUY' ? 'Bought' : 'Sold'} ${tradeEvent.amountSol.toFixed(2)} SOL of $${tradeEvent.tokenSymbol}`,
-              5000
+              {
+                message: `${wallet.emoji || '🐋'} ${wallet.nickname}: ${tradeEvent.type === 'BUY' ? 'Bought' : 'Sold'} ${tradeEvent.amountSol.toFixed(2)} SOL of $${tradeEvent.tokenSymbol}`,
+                tradeEvent,
+              },
+              6000
             );
 
             // Chrome desktop notification
@@ -1868,7 +1877,13 @@ export function TrackerView({
 
       if (discoveredEvents.length > 0) {
         setEvents((prev) => [...discoveredEvents, ...prev].slice(0, 50));
-        flashToast(`Synced ${discoveredEvents.length} recent trade(s) for ${wallet.nickname}`);
+        flashToast(
+          {
+            message: `Synced ${discoveredEvents.length} recent trade(s) for ${wallet.nickname}`,
+            tradeEvent: discoveredEvents[0],
+          },
+          5500
+        );
       }
     } catch (err) {
       console.warn('Initial sync failed for wallet', wallet.address, err);

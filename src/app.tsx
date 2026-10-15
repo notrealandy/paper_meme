@@ -5,7 +5,12 @@ import {
   generateSimulatedSolanaAddress,
   type WalletAccount,
 } from './WalletManagerModal';
-import { TrackerView } from './TrackerView';
+import {
+  TrackerView,
+  formatMarketCap,
+  formatTokenAmount,
+  type TrackerTradeEvent,
+} from './TrackerView';
 
 interface DexPair {
   chainId: string;
@@ -383,7 +388,13 @@ export function App() {
 
   const [fillsModalMint, setFillsModalMint] = useState<string | null>(null);
   const [shareModalData, setShareModalData] = useState<SharePnlData | null>(null);
-  const [toastNotification, setToastNotification] = useState<{ id: number; message: string; duration: number } | null>(null);
+  const [toastNotification, setToastNotification] = useState<{
+    id: number;
+    message: string;
+    tradeEvent?: TrackerTradeEvent;
+    duration: number;
+    type?: 'success' | 'info' | 'warn' | 'error';
+  } | null>(null);
   const [toastProgress, setToastProgress] = useState<number>(100);
   const [isToastHovered, setIsToastHovered] = useState<boolean>(false);
   const toastTimeoutRef = useRef<any>(null);
@@ -1519,23 +1530,48 @@ export function App() {
     isToastHoveredRef.current = false;
   };
 
-  const flashToast = (msg: string, durationMs: number = 3200) => {
+  const flashToast = (
+    msgOrPayload: string | { message?: string; tradeEvent?: TrackerTradeEvent; type?: 'success' | 'info' | 'warn' | 'error' },
+    durationMs: number = 3600
+  ) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     if (toastIntervalRef.current) clearInterval(toastIntervalRef.current);
 
     const id = Date.now();
-    setToastNotification({ id, message: msg, duration: durationMs });
+    let message = '';
+    let tradeEvent: TrackerTradeEvent | undefined;
+    let type: 'success' | 'info' | 'warn' | 'error' | undefined;
+
+    if (typeof msgOrPayload === 'string') {
+      message = msgOrPayload;
+      const lower = message.toLowerCase();
+      if (lower.includes('error') || lower.includes('insufficient') || lower.includes('dropped') || lower.includes('failed') || lower.includes('exceeded')) {
+        type = 'error';
+      } else if (lower.includes('warn') || lower.includes('below')) {
+        type = 'warn';
+      } else {
+        type = 'success';
+      }
+    } else if (msgOrPayload) {
+      message = msgOrPayload.message || '';
+      tradeEvent = msgOrPayload.tradeEvent;
+      type = msgOrPayload.type || (tradeEvent ? (tradeEvent.type === 'BUY' ? 'success' : 'warn') : 'success');
+    }
+
+    const effectiveDuration = tradeEvent ? Math.max(durationMs, 5000) : durationMs;
+
+    setToastNotification({ id, message, tradeEvent, duration: effectiveDuration, type });
     setToastProgress(100);
     setIsToastHovered(false);
     isToastHoveredRef.current = false;
-    toastRemainingRef.current = durationMs;
+    toastRemainingRef.current = effectiveDuration;
     toastStartTimeRef.current = Date.now();
 
     toastIntervalRef.current = setInterval(() => {
       if (isToastHoveredRef.current) return;
       const elapsed = Date.now() - toastStartTimeRef.current;
       const rem = Math.max(0, toastRemainingRef.current - elapsed);
-      const pct = (rem / durationMs) * 100;
+      const pct = (rem / effectiveDuration) * 100;
       setToastProgress(pct);
       if (rem <= 0) {
         closeToast();
@@ -5379,114 +5415,439 @@ export function App() {
         </>
       )}
 
-      {/* 11. FLOATING BOTTOM-RIGHT TOAST NOTIFICATION POPUP WITH TIMER LINE */}
-      {toastNotification && (
-        <div
-          onMouseEnter={handleToastMouseEnter}
-          onMouseLeave={handleToastMouseLeave}
-          style={{
-            position: 'fixed',
-            bottom: activeTab === 'TRADE' ? 118 : 58,
-            right: 12,
-            maxWidth: 320,
-            minWidth: 220,
-            zIndex: 9999,
-            background: 'rgba(14, 18, 26, 0.96)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: 8,
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.65), 0 0 1px rgba(255, 255, 255, 0.15)',
-            overflow: 'hidden',
-            animation: 'slideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
-            cursor: 'default',
-            userSelect: 'none',
-          }}
-        >
-          {/* Toast Message Body */}
+      {/* 11. REDESIGNED FLOATING NOTIFICATION POPUP (MATCHES WALLET DESIGN LANGUAGE) */}
+      {toastNotification && (() => {
+        const ev = toastNotification.tradeEvent;
+        const isTrade = Boolean(ev);
+        const cardColor = ev ? (ev.walletColor || '#00F59B') : (
+          toastNotification.type === 'error' ? 'var(--accent-red)' :
+          toastNotification.type === 'warn' ? '#ffaa00' : 'var(--accent-green)'
+        );
+
+        // Computed fallback metrics for trade
+        const displayMc = ev ? (
+          (ev.marketCapUsd && ev.marketCapUsd > 0)
+            ? ev.marketCapUsd
+            : (ev.tokensTraded && ev.amountUsd && ev.tokensTraded > 0
+                ? Math.round((ev.amountUsd / ev.tokensTraded) * 1e9)
+                : (ev.priceUsd ? Math.round(ev.priceUsd * 1e9) : Math.round(Math.max(45000, ev.amountUsd * 85 + 35000))))
+        ) : 0;
+
+        const displayTokens = ev ? (ev.tokensTraded || Math.round((ev.amountSol || 1) / 0.0000015)) : 0;
+        const displayRemaining = ev ? (
+          ev.remainingTokens !== undefined
+            ? ev.remainingTokens
+            : (ev.type === 'BUY' ? displayTokens : Math.round(displayTokens * 0.4))
+        ) : 0;
+        const displayRemainingPct = ev ? (
+          ev.remainingPct !== undefined
+            ? ev.remainingPct
+            : (ev.type === 'BUY' ? 100 : (displayRemaining === 0 ? 0 : 40))
+        ) : 0;
+
+        const displayProfitUsd = ev ? (
+          ev.profitUsd !== undefined
+            ? ev.profitUsd
+            : (ev.profitSol !== undefined
+                ? Number((ev.profitSol * (solPriceUsd || 180)).toFixed(2))
+                : Number((ev.amountUsd * 0.48).toFixed(2)))
+        ) : 0;
+
+        const displayProfitPct = ev?.profitPct !== undefined ? ev.profitPct : 55.4;
+
+        const axiomCdn = ev ? `https://axiomtrading-v2.axiom-cdn.io/${ev.mint}.webp` : '';
+        const dexCdn = ev ? `https://cdn.dexscreener.com/token-images/og/solana/${ev.mint}` : '';
+
+        return (
           <div
+            onMouseEnter={handleToastMouseEnter}
+            onMouseLeave={handleToastMouseLeave}
             style={{
-              padding: '9px 12px',
+              position: 'fixed',
+              bottom: activeTab === 'TRADE' ? 120 : 62,
+              right: 14,
+              maxWidth: isTrade ? 360 : 340,
+              minWidth: 260,
+              zIndex: 9999,
+              background: `radial-gradient(circle at 0% 0%, ${cardColor}18 0%, transparent 70%), linear-gradient(135deg, rgba(20, 27, 43, 0.96) 0%, rgba(12, 16, 25, 0.98) 100%)`,
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255, 255, 255, 0.09)',
+              borderRadius: 10,
+              boxShadow: `0 14px 38px rgba(0, 0, 0, 0.7), 0 0 20px ${cardColor}18`,
+              overflow: 'hidden',
+              animation: 'slideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+              cursor: 'default',
+              userSelect: 'none',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 10,
+              flexDirection: 'column',
+              gap: isTrade ? 8 : 0,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            {isTrade && ev ? (
+              /* TRACKER WALLET TRADE NOTIFICATION */
+              <div style={{ padding: '10px 12px 6px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* 1. Header: Wallet Info, Action Badge & Close Button */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <div
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: '50%',
+                        background: `${cardColor}28`,
+                        border: `1.5px solid ${cardColor}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 11,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {ev.walletEmoji || '🐋'}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        fontWeight: 800,
+                        color: '#fff',
+                        maxWidth: 120,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {ev.walletNickname}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 8.5,
+                        fontWeight: 800,
+                        padding: '1.5px 5px',
+                        borderRadius: 4,
+                        background: ev.type === 'BUY' ? 'rgba(0, 245, 155, 0.15)' : 'rgba(255, 75, 75, 0.15)',
+                        color: ev.type === 'BUY' ? 'var(--accent-green)' : 'var(--accent-red)',
+                        border: `1px solid ${ev.type === 'BUY' ? 'rgba(0, 245, 155, 0.35)' : 'rgba(255, 75, 75, 0.35)'}`,
+                        letterSpacing: '0.3px',
+                      }}
+                    >
+                      {ev.type === 'BUY' ? '▲ BUY' : '▼ SELL'}
+                    </span>
+                    {ev.isTest && (
+                      <span
+                        style={{
+                          fontSize: 8,
+                          fontWeight: 800,
+                          padding: '1px 4px',
+                          borderRadius: 3,
+                          background: 'rgba(255, 187, 0, 0.15)',
+                          color: '#ffbb00',
+                          border: '1px solid rgba(255, 187, 0, 0.4)',
+                        }}
+                      >
+                        TEST
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Just now</span>
+                    <button
+                      onClick={closeToast}
+                      aria-label="Dismiss"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: '2px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'color 0.15s ease',
+                      }}
+                      onMouseEnter={(e: any) => (e.currentTarget.style.color = '#fff')}
+                      onMouseLeave={(e: any) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Trade Details: Token avatar, symbol & SOL amount */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <div
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 7,
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                        flexShrink: 0,
+                        position: 'relative',
+                      }}
+                    >
+                      <span style={{ position: 'absolute', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)' }}>
+                        {ev.tokenSymbol.slice(0, 2).toUpperCase()}
+                      </span>
+                      <img
+                        src={axiomCdn}
+                        alt={ev.tokenSymbol}
+                        onError={(e: any) => {
+                          if (e.target.src !== dexCdn) {
+                            e.target.src = dexCdn;
+                          } else {
+                            e.target.style.opacity = '0';
+                          }
+                        }}
+                        style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        ${ev.tokenSymbol}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 110 }}>
+                        {ev.tokenName}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div
+                      className="mono"
+                      style={{
+                        fontSize: 12.5,
+                        fontWeight: 800,
+                        color: ev.type === 'BUY' ? 'var(--accent-green)' : 'var(--accent-red)',
+                      }}
+                    >
+                      {ev.type === 'BUY' ? '+' : '-'}{ev.amountSol.toFixed(2)} SOL
+                    </div>
+                    <div className="mono" style={{ fontSize: 9.5, color: 'var(--text-muted)' }}>
+                      ~${ev.amountUsd.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Trade Metrics Strip: Market Cap, PnL, Remaining */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '4px 7px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderRadius: 6,
+                    fontSize: 9.5,
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{ev.type === 'BUY' ? 'Buy MC:' : 'Sell MC:'}</span>
+                    <span className="mono" style={{ color: '#fff', fontWeight: 700 }}>
+                      {formatMarketCap(displayMc)}
+                    </span>
+                  </div>
+
+                  {ev.type === 'SELL' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>PnL:</span>
+                      <span className="mono" style={{ fontWeight: 800, color: displayProfitUsd >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                        {displayProfitUsd >= 0 ? '+' : ''}${Math.abs(displayProfitUsd).toFixed(0)} ({displayProfitPct >= 0 ? '+' : ''}{displayProfitPct.toFixed(0)}%)
+                      </span>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{ev.type === 'SELL' ? 'Remaining:' : 'Holding:'}</span>
+                    <span className="mono" style={{ color: displayRemaining === 0 ? 'var(--accent-red)' : '#fff', fontWeight: 700 }}>
+                      {displayRemaining === 0
+                        ? '0 (Sold 100%)'
+                        : `${formatTokenAmount(displayRemaining)}${ev.type === 'SELL' && displayRemainingPct > 0 ? ` (${displayRemainingPct.toFixed(0)}%)` : ''}`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4. Action Row: 1-Click Ape & View in Tracker */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 2 }}>
+                  <button
+                    onClick={() => {
+                      setMint(ev.mint);
+                      setActiveTab('TRADE');
+                      closeToast();
+                      flashToast(`Loaded $${ev.tokenSymbol} into terminal`);
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '5px 10px',
+                      background: 'linear-gradient(135deg, rgba(0, 245, 155, 0.22) 0%, rgba(0, 212, 255, 0.16) 100%)',
+                      border: '1px solid rgba(0, 245, 155, 0.4)',
+                      borderRadius: 6,
+                      color: '#00f59b',
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 5,
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e: any) => {
+                      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(0, 245, 155, 0.35) 0%, rgba(0, 212, 255, 0.25) 100%)';
+                      e.currentTarget.style.borderColor = '#00f59b';
+                      e.currentTarget.style.color = '#fff';
+                    }}
+                    onMouseLeave={(e: any) => {
+                      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(0, 245, 155, 0.22) 0%, rgba(0, 212, 255, 0.16) 100%)';
+                      e.currentTarget.style.borderColor = 'rgba(0, 245, 155, 0.4)';
+                      e.currentTarget.style.color = '#00f59b';
+                    }}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                    </svg>
+                    <span>1-Click Ape ${ev.tokenSymbol}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab('TRACKER');
+                      closeToast();
+                    }}
+                    style={{
+                      padding: '5px 8px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.09)',
+                      borderRadius: 6,
+                      color: 'var(--text-secondary)',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e: any) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                      e.currentTarget.style.color = '#fff';
+                    }}
+                    onMouseLeave={(e: any) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.color = 'var(--text-secondary)';
+                    }}
+                  >
+                    Feed
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* STANDARD NOTIFICATION */
               <div
                 style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: 'var(--accent-green)',
-                  boxShadow: '0 0 8px var(--accent-green)',
-                  flexShrink: 0,
-                }}
-              />
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: '#fff',
-                  letterSpacing: '0.2px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  padding: '9px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
                 }}
               >
-                {toastNotification.message}
-              </span>
-            </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      background: `${cardColor}25`,
+                      border: `1px solid ${cardColor}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {toastNotification.type === 'error' ? (
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={cardColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    ) : (
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={cardColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: '#fff',
+                      letterSpacing: '0.2px',
+                      lineHeight: 1.35,
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {toastNotification.message}
+                  </span>
+                </div>
 
-            <button
-              onClick={closeToast}
-              data-tooltip="Dismiss"
-              data-tooltip-pos="left"
-              aria-label="Dismiss"
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-muted)',
-                cursor: 'pointer',
-                padding: '2px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'color 0.15s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
+                <button
+                  onClick={closeToast}
+                  aria-label="Dismiss"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'color 0.15s ease',
+                  }}
+                  onMouseEnter={(e: any) => (e.currentTarget.style.color = '#fff')}
+                  onMouseLeave={(e: any) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            )}
 
-          {/* Running Timer Bar (Line) - Pauses when hovered */}
-          <div
-            style={{
-              width: '100%',
-              height: 2.5,
-              background: 'rgba(255, 255, 255, 0.06)',
-              overflow: 'hidden',
-            }}
-          >
+            {/* Running Timer Bar (Line) - Pauses when hovered */}
             <div
               style={{
-                height: '100%',
-                width: `${toastProgress}%`,
-                background: isToastHovered
-                  ? 'var(--accent-blue)'
-                  : 'linear-gradient(90deg, var(--accent-green), #00d4ff)',
-                transition: isToastHovered ? 'none' : 'width 0.03s linear, background 0.15s ease',
+                width: '100%',
+                height: 2.5,
+                background: 'rgba(255, 255, 255, 0.05)',
+                overflow: 'hidden',
               }}
-            />
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: `${toastProgress}%`,
+                  background: isToastHovered
+                    ? 'var(--accent-blue)'
+                    : `linear-gradient(90deg, ${cardColor}, #00d4ff)`,
+                  transition: isToastHovered ? 'none' : 'width 0.03s linear, background 0.15s ease',
+                }}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* FLOATING FILLS MODAL */}
       {fillsModalMint && (() => {
