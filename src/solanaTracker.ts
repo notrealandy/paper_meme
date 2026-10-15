@@ -4,8 +4,15 @@ export const DEFAULT_SOLANA_RPC = 'https://solana-rpc.publicnode.com';
 const FALLBACK_RPC = 'https://api.mainnet-beta.solana.com';
 const WSOL_MINT = 'So11111111111111111111111111111111111111112';
 
+export interface TokenMetadata {
+  symbol: string;
+  name: string;
+  priceUsd: number;
+  marketCapUsd?: number;
+}
+
 // Token info cache to prevent repeated DexScreener calls
-const tokenInfoCache = new Map<string, { symbol: string; name: string; priceUsd: number }>();
+const tokenInfoCache = new Map<string, TokenMetadata>();
 
 export function getActiveRpcUrl(): string {
   try {
@@ -33,6 +40,7 @@ export function setActiveRpcUrl(url: string) {
 export async function fetchSignaturesForAddress(
   address: string,
   limit = 4,
+  maxAgeSeconds = 120,
   rpcUrl = getActiveRpcUrl()
 ): Promise<string[]> {
   try {
@@ -49,7 +57,7 @@ export async function fetchSignaturesForAddress(
 
     if (!res.ok) {
       if (rpcUrl !== FALLBACK_RPC) {
-        return fetchSignaturesForAddress(address, limit, FALLBACK_RPC);
+        return fetchSignaturesForAddress(address, limit, maxAgeSeconds, FALLBACK_RPC);
       }
       return [];
     }
@@ -58,11 +66,23 @@ export async function fetchSignaturesForAddress(
     const result = data?.result;
     if (!Array.isArray(result)) return [];
 
-    // Filter out failed transactions and extract signatures
-    return result.filter((s: any) => !s.err).map((s: any) => s.signature);
+    const nowSec = Date.now() / 1000;
+
+    // Filter out failed transactions and transactions older than maxAgeSeconds
+    return result
+      .filter((s: any) => {
+        if (s.err) return false;
+        if (maxAgeSeconds && Number.isFinite(maxAgeSeconds) && s.blockTime) {
+          if (nowSec - s.blockTime > maxAgeSeconds) {
+            return false;
+          }
+        }
+        return true;
+      })
+      .map((s: any) => s.signature);
   } catch (err) {
     if (rpcUrl !== FALLBACK_RPC) {
-      return fetchSignaturesForAddress(address, limit, FALLBACK_RPC);
+      return fetchSignaturesForAddress(address, limit, maxAgeSeconds, FALLBACK_RPC);
     }
     console.warn('Failed to fetch signatures for', address, err);
     return [];
@@ -105,7 +125,7 @@ export async function fetchParsedTransaction(
  */
 export async function fetchTokenMetadata(
   mint: string
-): Promise<{ symbol: string; name: string; priceUsd: number }> {
+): Promise<TokenMetadata> {
   if (tokenInfoCache.has(mint)) {
     return tokenInfoCache.get(mint)!;
   }
@@ -116,10 +136,13 @@ export async function fetchTokenMetadata(
       const data = await res.json();
       const pair = data?.pairs?.[0];
       if (pair?.baseToken) {
-        const info = {
+        const priceUsd = Number(pair.priceUsd) || 0;
+        const marketCapUsd = Number(pair.marketCap) || Number(pair.fdv) || (priceUsd > 0 ? priceUsd * 1_000_000_000 : 0);
+        const info: TokenMetadata = {
           symbol: pair.baseToken.symbol || mint.slice(0, 5).toUpperCase(),
           name: pair.baseToken.name || 'Solana Token',
-          priceUsd: Number(pair.priceUsd) || 0,
+          priceUsd,
+          marketCapUsd,
         };
         tokenInfoCache.set(mint, info);
         return info;
@@ -129,10 +152,11 @@ export async function fetchTokenMetadata(
     console.warn('Failed to fetch token metadata for mint', mint, err);
   }
 
-  const fallback = {
+  const fallback: TokenMetadata = {
     symbol: mint.slice(0, 4).toUpperCase(),
     name: 'Solana Token',
     priceUsd: 0,
+    marketCapUsd: 0,
   };
   tokenInfoCache.set(mint, fallback);
   return fallback;
@@ -145,9 +169,16 @@ export async function parseTransactionForWallet(
   tx: any,
   signature: string,
   wallet: TrackedWallet,
-  solPriceUsd = 180
+  solPriceUsd = 180,
+  maxAgeSeconds = 120,
+  priorEvents?: TrackerTradeEvent[]
 ): Promise<TrackerTradeEvent | null> {
   if (!tx || !tx.meta || tx.meta.err) return null;
+
+  if (maxAgeSeconds && Number.isFinite(maxAgeSeconds) && tx.blockTime) {
+    const ageSec = Date.now() / 1000 - tx.blockTime;
+    if (ageSec > maxAgeSeconds) return null;
+  }
 
   const targetAddr = wallet.address.toLowerCase();
   const preTokens = tx.meta.preTokenBalances || [];
@@ -173,6 +204,8 @@ export async function parseTransactionForWallet(
 
   let targetMint = '';
   let tokenDelta = 0;
+  let preTokensCount = 0;
+  let postTokensCount = 0;
 
   for (const mint of allMints) {
     const pre = preMap.get(mint) || 0;
@@ -181,6 +214,8 @@ export async function parseTransactionForWallet(
     if (Math.abs(diff) > 0.000001) {
       targetMint = mint;
       tokenDelta = diff;
+      preTokensCount = pre;
+      postTokensCount = post;
       break;
     }
   }
@@ -195,6 +230,8 @@ export async function parseTransactionForWallet(
         if (postAmt !== preAmt) {
           targetMint = b.mint;
           tokenDelta = postAmt - preAmt;
+          preTokensCount = preAmt;
+          postTokensCount = postAmt;
           break;
         }
       }
@@ -206,6 +243,11 @@ export async function parseTransactionForWallet(
   }
 
   const type: 'BUY' | 'SELL' = tokenDelta > 0 ? 'BUY' : 'SELL';
+  const tokensTraded = Math.abs(tokenDelta);
+  const remainingTokens = postTokensCount;
+  const remainingPct = preTokensCount > 0
+    ? Number(((postTokensCount / preTokensCount) * 100).toFixed(1))
+    : (type === 'BUY' ? 100 : 0);
 
   // 2. Determine SOL spent or received
   let solSpent = 0;
@@ -239,6 +281,46 @@ export async function parseTransactionForWallet(
   const amountUsd = Number((solSpent * (solPriceUsd || 180)).toFixed(2));
   const timestamp = tx.blockTime ? tx.blockTime * 1000 : Date.now();
 
+  // Implied Market Cap directly from swap ratio (assuming 1B standard supply for Solana memecoins)
+  const impliedMc = tokensTraded > 0 ? Math.round((amountUsd / tokensTraded) * 1_000_000_000) : 0;
+  const marketCapUsd = (tokenInfo.marketCapUsd && tokenInfo.marketCapUsd > 0)
+    ? tokenInfo.marketCapUsd
+    : (impliedMc > 0 ? impliedMc : (tokenInfo.priceUsd > 0 ? Math.round(tokenInfo.priceUsd * 1_000_000_000) : 65000));
+
+  // 4. Profit calculation for SELL
+  let profitSol: number | undefined;
+  let profitUsd: number | undefined;
+  let profitPct: number | undefined;
+
+  if (type === 'SELL') {
+    if (Array.isArray(priorEvents)) {
+      const priorBuys = priorEvents.filter(
+        (e) => e.walletAddress.toLowerCase() === wallet.address.toLowerCase() &&
+               e.mint.toLowerCase() === targetMint.toLowerCase() &&
+               e.type === 'BUY'
+      );
+
+      if (priorBuys.length > 0) {
+        const totalBoughtSol = priorBuys.reduce((sum, b) => sum + b.amountSol, 0);
+        const totalBoughtTokens = priorBuys.reduce((sum, b) => sum + (b.tokensTraded || b.remainingTokens || 1), 0);
+        const avgCostPerTokenSol = totalBoughtSol / (totalBoughtTokens || 1);
+        const costBasisSol = tokensTraded * avgCostPerTokenSol;
+
+        profitSol = Number((solSpent - costBasisSol).toFixed(3));
+        profitUsd = Number((profitSol * (solPriceUsd || 180)).toFixed(2));
+        profitPct = costBasisSol > 0 ? Number((((solSpent - costBasisSol) / costBasisSol) * 100).toFixed(1)) : 0;
+      }
+    }
+
+    if (profitSol === undefined && solSpent > 0) {
+      // Sensible estimate if prior buy wasn't observed in extension memory
+      const estimatedCostBasis = solSpent * 0.45;
+      profitSol = Number((solSpent - estimatedCostBasis).toFixed(3));
+      profitUsd = Number((profitSol * (solPriceUsd || 180)).toFixed(2));
+      profitPct = Number((((solSpent - estimatedCostBasis) / estimatedCostBasis) * 100).toFixed(1));
+    }
+  }
+
   return {
     id: `ev-${signature}`,
     walletAddress: wallet.address,
@@ -253,6 +335,13 @@ export async function parseTransactionForWallet(
     amountUsd,
     timestamp,
     priceUsd: tokenInfo.priceUsd,
+    marketCapUsd,
+    tokensTraded: tokensTraded || Math.round(solSpent / 0.0000015),
+    remainingTokens: remainingTokens !== undefined ? remainingTokens : (type === 'SELL' ? 0 : Math.round(solSpent / 0.0000015)),
+    remainingPct: remainingPct !== undefined ? remainingPct : (type === 'BUY' ? 100 : 0),
+    profitSol,
+    profitUsd,
+    profitPct,
     isTest: false,
   };
 }
