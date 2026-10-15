@@ -204,7 +204,8 @@ export function WalletManagerModal({
 
             <button
               onClick={onClose}
-              title="Close"
+              data-tooltip="Close Modal"
+              data-tooltip-pos="bottom"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -448,7 +449,9 @@ export function WalletManagerModal({
                     {/* Address pill with copy */}
                     <button
                       onClick={(e) => handleCopyAddress(e, w.id, w.address)}
-                      title="Copy simulated address"
+                      data-tooltip="Copy simulated address"
+                      data-tooltip-sub={w.address}
+                      data-tooltip-pos="top"
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -473,7 +476,8 @@ export function WalletManagerModal({
                     {!isEditing && (
                       <button
                         onClick={(e) => startRename(e, w)}
-                        title="Rename Wallet"
+                        data-tooltip="Rename Wallet"
+                        data-tooltip-pos="top"
                         style={{
                           background: 'none',
                           border: 'none',
@@ -499,7 +503,9 @@ export function WalletManagerModal({
                         e.stopPropagation();
                         onExportWallet(w.id);
                       }}
-                      title="Export Backup (JSON)"
+                      data-tooltip="Export Wallet Backup"
+                      data-tooltip-sub="Download JSON file for this wallet"
+                      data-tooltip-pos="top"
                       style={{
                         background: 'none',
                         border: 'none',
@@ -528,7 +534,9 @@ export function WalletManagerModal({
                             onDeleteWallet(w.id);
                           }
                         }}
-                        title="Delete Wallet"
+                        data-tooltip="Delete Wallet"
+                        data-tooltip-sub="Permanently removes this wallet profile"
+                        data-tooltip-pos="top"
                         style={{
                           background: 'none',
                           border: 'none',
@@ -591,7 +599,9 @@ export function WalletManagerModal({
           {/* Export All Backup */}
           <button
             onClick={onExportAll}
-            title="Export full backup of all wallets"
+            data-tooltip="Export All Wallets"
+            data-tooltip-sub="Download full JSON backup of all wallets & balances"
+            data-tooltip-pos="top"
             style={{
               flex: 1,
               display: 'flex',
@@ -627,7 +637,9 @@ export function WalletManagerModal({
 
           {/* Import Wallet Button */}
           <label
-            title="Import wallet or full backup JSON"
+            data-tooltip="Import Wallet Backup"
+            data-tooltip-sub="Upload wallet JSON backup file"
+            data-tooltip-pos="top"
             style={{
               flex: 1,
               display: 'flex',

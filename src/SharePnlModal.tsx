@@ -711,7 +711,8 @@ export function SharePnlModal({ data, onClose }: SharePnlModalProps) {
 
             <button
               onClick={onClose}
-              title="Close"
+              data-tooltip="Close Modal"
+              data-tooltip-pos="bottom"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -781,6 +782,9 @@ export function SharePnlModal({ data, onClose }: SharePnlModalProps) {
           {/* Download Button */}
           <button
             onClick={handleDownload}
+            data-tooltip="Download Card as PNG"
+            data-tooltip-sub="Saves high-res PnL graphic to your computer"
+            data-tooltip-pos="top"
             style={{
               flex: 1,
               display: 'flex',
@@ -811,6 +815,9 @@ export function SharePnlModal({ data, onClose }: SharePnlModalProps) {
           {/* Copy Image Button */}
           <button
             onClick={handleCopy}
+            data-tooltip="Copy Card to Clipboard"
+            data-tooltip-sub="Paste directly into Twitter, Telegram, or Discord"
+            data-tooltip-pos="top"
             style={{
               flex: 1,
               display: 'flex',

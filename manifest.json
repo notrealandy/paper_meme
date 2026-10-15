@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Paper Meme (by @notrealandy)",
   "version": "1.0.0",
-  "permissions": ["sidePanel", "storage", "activeTab", "tabs", "scripting"],
+  "permissions": ["sidePanel", "storage", "activeTab", "tabs", "scripting", "notifications"],
   "host_permissions": [
     "<all_urls>"
   ],

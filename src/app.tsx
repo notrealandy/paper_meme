@@ -5,6 +5,7 @@ import {
   generateSimulatedSolanaAddress,
   type WalletAccount,
 } from './WalletManagerModal';
+import { TrackerView } from './TrackerView';
 
 interface DexPair {
   chainId: string;
@@ -353,7 +354,29 @@ export function App() {
   const [customFeeInput, setCustomFeeInput] = useState<string>('');
   const [showFeeModal, setShowFeeModal] = useState<boolean>(false);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'TRADE' | 'POSITIONS' | 'HISTORY' | 'STATS'>('TRADE');
+  const [activeTab, setActiveTab] = useState<'TRADE' | 'TRACKER' | 'HISTORY'>('TRADE');
+  const [unreadTrackerCount, setUnreadTrackerCount] = useState<number>(0);
+  const [showPositionsPopup, setShowPositionsPopup] = useState<boolean>(false);
+  const [isPositionsPopupClosing, setIsPositionsPopupClosing] = useState<boolean>(false);
+
+  const closePositionsPopup = () => {
+    if (isPositionsPopupClosing) return;
+    setIsPositionsPopupClosing(true);
+    setTimeout(() => {
+      setShowPositionsPopup(false);
+      setIsPositionsPopupClosing(false);
+    }, 180);
+  };
+
+  const togglePositionsPopup = () => {
+    if (showPositionsPopup) {
+      closePositionsPopup();
+    } else {
+      setIsPositionsPopupClosing(false);
+      setShowPositionsPopup(true);
+    }
+  };
+
   const [fillsModalMint, setFillsModalMint] = useState<string | null>(null);
   const [shareModalData, setShareModalData] = useState<SharePnlData | null>(null);
   const [toastNotification, setToastNotification] = useState<{ id: number; message: string; duration: number } | null>(null);
@@ -2360,7 +2383,9 @@ export function App() {
           {/* Wallet Manager Toggle Button */}
           <button
             onClick={() => setShowWalletManager(!showWalletManager)}
-            title={`Active: ${activeWallet?.name || 'Wallet'} (${(activeWallet?.balance ?? balance).toFixed(2)} SOL)`}
+            data-tooltip={`Active Wallet: ${activeWallet?.name || 'Wallet'}`}
+            data-tooltip-sub={`${(activeWallet?.balance ?? balance).toFixed(2)} SOL - Click to manage wallets`}
+            data-tooltip-pos="bottom"
             style={{
               background: showWalletManager ? 'rgba(0, 245, 155, 0.15)' : 'rgba(255, 255, 255, 0.04)',
               border: showWalletManager ? '1px solid rgba(0, 245, 155, 0.4)' : '1px solid var(--border-subtle)',
@@ -2427,7 +2452,9 @@ export function App() {
           {/* Quick Search Toggle */}
           <button
             onClick={() => setShowSearch(!showSearch)}
-            title="Search or Paste Mint"
+            data-tooltip="Search or Paste Mint"
+            data-tooltip-sub="Search token symbol or paste Solana contract address"
+            data-tooltip-pos="bottom"
             style={{
               background: showSearch ? 'var(--border-subtle)' : 'transparent',
               border: '1px solid var(--border-subtle)',
@@ -2494,252 +2521,279 @@ export function App() {
 
 
 
-      {/* 2. MINIMALISTIC PORTFOLIO & POSITIONS HEADER */}
-      <div
-        style={{
-          padding: '10px 14px 8px 14px',
-          background: 'var(--bg-surface)',
-          borderBottom: '1px solid var(--border-subtle)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}
-      >
-        {/* Main Stats Row: Cash Available & Open Positions (Bought, Holding, PnL) */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-          {/* Left: Cash Available */}
-          <div
-            onClick={() => {
-              setCustomBalanceInput(startingBalance.toString());
-              setShowBalanceModal(true);
-            }}
-            title="Click to modify paper funds or manage starting balance"
-            style={{
-              cursor: 'pointer',
-              userSelect: 'none',
-              transition: 'opacity 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-          >
-            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span>Cash Available</span>
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9"></path>
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-              </svg>
-            </div>
-            <div style={{ marginTop: 2 }}>
-              <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <img
-                  src="https://axiom-assets-v2.axiom-cdn.io/images/sol-fill.svg"
-                  alt="SOL"
-                  style={{ width: 13, height: 13, flexShrink: 0, display: 'block' }}
-                />
-                <span>{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</span>
-              </div>
-              <div className="mono" style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', marginTop: 1 }}>
-                ${(balance * (solPriceUsd || 150)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-            </div>
-          </div>
-
-          {/* Right: Open Positions Total Bought, Holding & PnL */}
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-                Positions ({portfolioStats.count})
-              </span>
-              <span
-                className="mono"
-                style={{
-                  fontSize: 9,
-                  fontWeight: 800,
-                  color: portfolioStats.openPositionsPnlSol >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
-                  background: portfolioStats.openPositionsPnlSol >= 0 ? 'rgba(0, 245, 155, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                  padding: '1px 4px',
-                  borderRadius: 3,
-                }}
-              >
-                {portfolioStats.openPositionsPnlSol >= 0 ? '+' : ''}
-                {portfolioStats.openPositionsPnlPct.toFixed(1)}%
-              </span>
-            </div>
-
-            {/* Holding in SOL (with Solana logo) & PnL */}
-            <div style={{ marginTop: 2 }}>
-              <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                <img
-                  src="https://axiom-assets-v2.axiom-cdn.io/images/sol-fill.svg"
-                  alt="SOL"
-                  style={{ width: 13, height: 13, flexShrink: 0, display: 'block' }}
-                />
-                <span>{portfolioStats.openPositionsValueSol.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</span>
-              </div>
-
-              {/* Sub-line: Bought vs Total PnL in SOL */}
-              <div className="mono" style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
-                <span>Bought {portfolioStats.totalInvestedSol.toFixed(2)}</span>
-                <span style={{ color: 'var(--border-hover)' }}>·</span>
-                <span style={{ color: portfolioStats.openPositionsPnlSol >= 0 ? 'var(--accent-green)' : 'var(--accent-red)', fontWeight: 700 }}>
-                  {portfolioStats.openPositionsPnlSol >= 0 ? '+' : ''}
-                  {portfolioStats.openPositionsPnlSol.toFixed(3)} SOL
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Utility Row: Live SOL Price Pill & Minimal Quick Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2 }}>
-          {/* Left: Solana Logo & Live Price Pill */}
-          <div
-            title="Live Solana Price (SOL/USD)"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4.5,
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              borderRadius: 6,
-              padding: '2px 7px',
-              userSelect: 'none',
-            }}
-          >
-            {/* Axiom Solana Icon */}
-            <img
-              src="https://axiom-assets-v2.axiom-cdn.io/images/sol-fill.svg"
-              alt="SOL"
-              style={{ width: 11, height: 11, flexShrink: 0, display: 'block' }}
-            />
-            <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: '#e2e8f0', letterSpacing: '-0.2px' }}>
-              ${(solPriceUsd || 150).toFixed(2)}
-            </span>
-          </div>
-
-          {/* Right: Minimal Actions (+5, +10, Settings, Reset) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            {/* Quick Fund +5 SOL */}
-            <button
-              onClick={() => addFunds(5)}
-              title="Add +5 SOL Paper Funds"
-              style={{
-                background: 'rgba(0, 245, 155, 0.07)',
-                border: '1px solid rgba(0, 245, 155, 0.2)',
-                borderRadius: 5,
-                padding: '2px 7px',
-                color: 'var(--accent-green)',
-                fontSize: 9.5,
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 245, 155, 0.15)';
-                e.currentTarget.style.borderColor = 'rgba(0, 245, 155, 0.35)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 245, 155, 0.07)';
-                e.currentTarget.style.borderColor = 'rgba(0, 245, 155, 0.2)';
-              }}
-            >
-              +5 SOL
-            </button>
-
-            {/* Quick Fund +10 */}
-            <button
-              onClick={() => addFunds(10)}
-              title="Add +10 SOL Paper Funds"
-              style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
-                borderRadius: 5,
-                padding: '2px 6px',
-                color: 'var(--text-secondary)',
-                fontSize: 9.5,
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)';
-                e.currentTarget.style.color = '#fff';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                e.currentTarget.style.color = 'var(--text-secondary)';
-              }}
-            >
-              +10
-            </button>
-
-            {/* Settings */}
-            <button
+      {/* 2. MINIMALISTIC PORTFOLIO & POSITIONS HEADER (ONLY ON TERMINAL TAB) */}
+      {activeTab === 'TRADE' && (
+        <div
+          style={{
+            padding: '10px 14px 8px 14px',
+            background: 'var(--bg-surface)',
+            borderBottom: '1px solid var(--border-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
+          {/* Main Stats Row: Cash Available & Open Positions (Bought, Holding, PnL) */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+            {/* Left: Cash Available */}
+            <div
               onClick={() => {
                 setCustomBalanceInput(startingBalance.toString());
                 setShowBalanceModal(true);
               }}
-              title="Capital & Wallet Settings"
+              data-tooltip="Cash Available"
+              data-tooltip-sub="Click to modify paper funds or manage starting balance"
+              data-tooltip-pos="bottom"
               style={{
-                background: 'transparent',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
-                borderRadius: 5,
-                padding: '3px 6px',
-                color: 'var(--text-muted)',
                 cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.15s ease',
+                userSelect: 'none',
+                transition: 'opacity 0.15s ease',
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-                e.currentTarget.style.color = '#fff';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
-                e.currentTarget.style.color = 'var(--text-muted)';
-              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-              </svg>
-            </button>
+              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span>Cash Available</span>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+              </div>
+              <div style={{ marginTop: 2 }}>
+                <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <img
+                    src="https://axiom-assets-v2.axiom-cdn.io/images/sol-fill.svg"
+                    alt="SOL"
+                    style={{ width: 13, height: 13, flexShrink: 0, display: 'block' }}
+                  />
+                  <span>{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</span>
+                </div>
+                <div className="mono" style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', marginTop: 1 }}>
+                  ${(balance * (solPriceUsd || 150)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
 
-            {/* Reset */}
-            <button
-              onClick={resetAll}
-              title={`Reset All Funds to ${startingBalance} SOL & Clear Positions`}
+            {/* Right: Open Positions Total Bought, Holding & PnL */}
+            <div
+              onClick={togglePositionsPopup}
+              data-tooltip="Open Positions"
+              data-tooltip-sub={`View all ${portfolioStats.count} active trades and PnL breakdown`}
+              data-tooltip-pos="bottom"
               style={{
-                background: 'transparent',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
-                borderRadius: 5,
-                padding: '3px 6px',
-                color: 'var(--text-muted)',
+                textAlign: 'right',
                 cursor: 'pointer',
-                display: 'flex',
+                userSelect: 'none',
+                transition: 'opacity 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                  Positions ({portfolioStats.count})
+                </span>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 800,
+                    color: portfolioStats.openPositionsPnlSol >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+                    background: portfolioStats.openPositionsPnlSol >= 0 ? 'rgba(0, 245, 155, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                    padding: '1px 4px',
+                    borderRadius: 3,
+                  }}
+                >
+                  {portfolioStats.openPositionsPnlSol >= 0 ? '+' : ''}
+                  {portfolioStats.openPositionsPnlPct.toFixed(1)}%
+                </span>
+              </div>
+
+              {/* Holding in SOL (with Solana logo) & PnL */}
+              <div style={{ marginTop: 2 }}>
+                <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                  <img
+                    src="https://axiom-assets-v2.axiom-cdn.io/images/sol-fill.svg"
+                    alt="SOL"
+                    style={{ width: 13, height: 13, flexShrink: 0, display: 'block' }}
+                  />
+                  <span>{portfolioStats.openPositionsValueSol.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</span>
+                </div>
+
+                {/* Sub-line: Bought vs Total PnL in SOL */}
+                <div className="mono" style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
+                  <span>Bought {portfolioStats.totalInvestedSol.toFixed(2)}</span>
+                  <span style={{ color: 'var(--border-hover)' }}>·</span>
+                  <span style={{ color: portfolioStats.openPositionsPnlSol >= 0 ? 'var(--accent-green)' : 'var(--accent-red)', fontWeight: 700 }}>
+                    {portfolioStats.openPositionsPnlSol >= 0 ? '+' : ''}
+                    {portfolioStats.openPositionsPnlSol.toFixed(3)} SOL
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Utility Row: Live SOL Price Pill & Minimal Quick Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2 }}>
+            {/* Left: Solana Logo & Live Price Pill */}
+            <div
+              data-tooltip="Live Solana Price"
+              data-tooltip-sub="SOL / USD real-time price feed"
+              data-tooltip-pos="bottom"
+              style={{
+                display: 'inline-flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-                e.currentTarget.style.color = 'var(--accent-red)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
-                e.currentTarget.style.color = 'var(--text-muted)';
+                gap: 4.5,
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                borderRadius: 6,
+                padding: '2px 7px',
+                userSelect: 'none',
               }}
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="23 4 23 10 17 10"></polyline>
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-              </svg>
-            </button>
+              {/* Axiom Solana Icon */}
+              <img
+                src="https://axiom-assets-v2.axiom-cdn.io/images/sol-fill.svg"
+                alt="SOL"
+                style={{ width: 11, height: 11, flexShrink: 0, display: 'block' }}
+              />
+              <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: '#e2e8f0', letterSpacing: '-0.2px' }}>
+                ${(solPriceUsd || 150).toFixed(2)}
+              </span>
+            </div>
+
+            {/* Right: Minimal Actions (+5, +10, Settings, Reset) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              {/* Quick Fund +5 SOL */}
+              <button
+                onClick={() => addFunds(5)}
+                data-tooltip="Add +5 SOL Paper Funds"
+                data-tooltip-sub="Instantly deposit paper Solana into current wallet"
+                data-tooltip-pos="bottom"
+                style={{
+                  background: 'rgba(0, 245, 155, 0.07)',
+                  border: '1px solid rgba(0, 245, 155, 0.2)',
+                  borderRadius: 5,
+                  padding: '2px 7px',
+                  color: 'var(--accent-green)',
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 245, 155, 0.15)';
+                  e.currentTarget.style.borderColor = 'rgba(0, 245, 155, 0.35)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 245, 155, 0.07)';
+                  e.currentTarget.style.borderColor = 'rgba(0, 245, 155, 0.2)';
+                }}
+              >
+                +5 SOL
+              </button>
+
+              {/* Quick Fund +10 */}
+              <button
+                onClick={() => addFunds(10)}
+                data-tooltip="Add +10 SOL Paper Funds"
+                data-tooltip-sub="Instantly deposit paper Solana into current wallet"
+                data-tooltip-pos="bottom"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: 5,
+                  padding: '2px 6px',
+                  color: 'var(--text-secondary)',
+                  fontSize: 9.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)';
+                  e.currentTarget.style.color = '#fff';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                }}
+              >
+                +10
+              </button>
+
+              {/* Settings */}
+              <button
+                onClick={() => {
+                  setCustomBalanceInput(startingBalance.toString());
+                  setShowBalanceModal(true);
+                }}
+                data-tooltip="Capital & Wallet Settings"
+                data-tooltip-sub="Configure starting balance and paper trading parameters"
+                data-tooltip-pos="bottom"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: 5,
+                  padding: '3px 6px',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                  e.currentTarget.style.color = '#fff';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
+                  e.currentTarget.style.color = 'var(--text-muted)';
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+              </button>
+
+              {/* Reset */}
+              <button
+                onClick={resetAll}
+                data-tooltip="Reset Portfolio"
+                data-tooltip-sub={`Reset all funds to ${startingBalance} SOL and clear all positions`}
+                data-tooltip-pos="bottom"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: 5,
+                  padding: '3px 6px',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                  e.currentTarget.style.color = 'var(--accent-red)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
+                  e.currentTarget.style.color = 'var(--text-muted)';
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* BALANCE / CAPITAL SETTINGS MODAL */}
       {showBalanceModal && (
@@ -3201,7 +3255,8 @@ export function App() {
                 {presetGroups.length > 1 && (
                   <button
                     onClick={() => handleDeletePresetGroup(editingGroupId)}
-                    title="Delete this preset profile"
+                    data-tooltip="Delete Preset Profile"
+                    data-tooltip-pos="top"
                     style={{
                       background: 'var(--accent-red-bg)',
                       border: '1px solid var(--accent-red-border)',
@@ -3287,7 +3342,8 @@ export function App() {
                           padding: '0 4px',
                           cursor: 'pointer',
                         }}
-                        title="Remove button"
+                        data-tooltip="Remove Preset Amount"
+                        data-tooltip-pos="top"
                       >
                         ✕
                       </button>
@@ -3449,7 +3505,8 @@ export function App() {
                 {sellPresetGroups.length > 1 && (
                   <button
                     onClick={() => handleDeleteSellPresetGroup(editingSellGroupId)}
-                    title="Delete this sell preset profile"
+                    data-tooltip="Delete Sell Preset Profile"
+                    data-tooltip-pos="top"
                     style={{
                       background: 'var(--accent-red-bg)',
                       border: '1px solid var(--accent-red-border)',
@@ -3536,7 +3593,8 @@ export function App() {
                           padding: '0 4px',
                           cursor: 'pointer',
                         }}
-                        title="Remove button"
+                        data-tooltip="Remove Percentage Button"
+                        data-tooltip-pos="top"
                       >
                         ✕
                       </button>
@@ -3576,8 +3634,11 @@ export function App() {
       )}
 
       <div style={{ flex: 1, padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {/* 3. TOKEN IDENTITY & PRICE HERO (MINIMALISTIC) */}
-        {mint ? (
+        {/* VIEW 1: TRADING TERMINAL */}
+        {activeTab === 'TRADE' && (
+          <>
+            {/* 3. TOKEN IDENTITY & PRICE HERO (MINIMALISTIC) */}
+            {mint ? (
           <div
             style={{
               padding: '12px 14px',
@@ -3755,7 +3816,9 @@ export function App() {
                     gap: 4,
                     transition: 'all 0.15s ease',
                   }}
-                  title="Click to copy CA"
+                  data-tooltip="Click to copy Contract Address"
+                  data-tooltip-sub={mint}
+                  data-tooltip-pos="top"
                 >
                   <span className="mono">{mint.slice(0, 4)}...{mint.slice(-4)}</span>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -3774,7 +3837,9 @@ export function App() {
                     href={`https://axiom.trade/meme/${mint}`}
                     target="_blank"
                     rel="noreferrer"
-                    title="Open on Axiom.trade"
+                    data-tooltip="Open on Axiom.trade"
+                    data-tooltip-sub="View chart & live trade on Axiom"
+                    data-tooltip-pos="top"
                     style={{
                       background: 'rgba(255, 255, 255, 0.04)',
                       border: '1px solid rgba(255, 255, 255, 0.08)',
@@ -4049,7 +4114,8 @@ export function App() {
                   })}
                   <button
                     onClick={handleCreatePresetGroup}
-                    title="Add new preset profile"
+                    data-tooltip="Add new preset profile"
+                    data-tooltip-pos="top"
                     style={{
                       background: 'transparent',
                       border: '1px dashed rgba(255, 255, 255, 0.1)',
@@ -4082,7 +4148,9 @@ export function App() {
                     gap: 3,
                     fontWeight: 600,
                   }}
-                  title="Configure preset buttons"
+                  data-tooltip="Configure preset buttons"
+                  data-tooltip-sub="Customize quick buy amounts for this profile"
+                  data-tooltip-pos="top"
                 >
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 20h9"></path>
@@ -4114,7 +4182,9 @@ export function App() {
                         fontSize: 11,
                         fontWeight: 800,
                       }}
-                      title={`Buy ${amt} SOL (~$${amtUsd.toFixed(1)})`}
+                      data-tooltip={`Buy ${amt} SOL`}
+                      data-tooltip-sub={`~$${amtUsd.toFixed(1)} USD paper order`}
+                      data-tooltip-pos="top"
                     >
                       {amt}
                     </button>
@@ -4234,7 +4304,8 @@ export function App() {
                   })}
                   <button
                     onClick={handleCreateSellPresetGroup}
-                    title="Add new sell preset profile"
+                    data-tooltip="Add new sell preset profile"
+                    data-tooltip-pos="top"
                     style={{
                       background: 'transparent',
                       border: '1px dashed rgba(255, 255, 255, 0.1)',
@@ -4267,7 +4338,9 @@ export function App() {
                     gap: 3,
                     fontWeight: 600,
                   }}
-                  title="Configure sell preset buttons"
+                  data-tooltip="Configure sell preset buttons"
+                  data-tooltip-sub="Customize exit percentages for this profile"
+                  data-tooltip-pos="top"
                 >
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 20h9"></path>
@@ -4292,7 +4365,9 @@ export function App() {
                         fontSize: 11,
                         fontWeight: 800,
                       }}
-                      title={`Sell ${pct}% of ${symbol}`}
+                      data-tooltip={`Sell ${pct}% of ${symbol}`}
+                      data-tooltip-sub="Market sell portion of position"
+                      data-tooltip-pos="top"
                     >
                       {pct}%
                     </button>
@@ -4301,7 +4376,9 @@ export function App() {
                 <button
                   onClick={executeSellInitial}
                   disabled={!currentPosition || currentPosition.tokens <= 0 || price <= 0}
-                  title="Sell initial USD investment to keep remaining bag risk-free"
+                  data-tooltip="Sell Initial Investment"
+                  data-tooltip-sub="Sell initial USD investment to keep remaining bag risk-free"
+                  data-tooltip-pos="top"
                   style={{
                     background: 'rgba(255, 149, 0, 0.08)',
                     border: '1px solid rgba(255, 149, 0, 0.25)',
@@ -4465,7 +4542,9 @@ export function App() {
                       borderRadius: 4,
                       cursor: 'pointer',
                     }}
-                    title="Set custom slippage percentage"
+                    data-tooltip="Custom Slippage Tolerance"
+                    data-tooltip-sub="Set custom percentage max price impact"
+                    data-tooltip-pos="top"
                   >
                     {!['0.5%', '1.0%', '3.0%', 'Auto'].includes(slippage) ? slippage : 'Custom'}
                   </button>
@@ -4490,7 +4569,9 @@ export function App() {
                     alignItems: 'center',
                     gap: 3,
                   }}
-                  title="Configure Solana Priority Fee / Jito MEV Bribe"
+                  data-tooltip="Priority Fee & MEV"
+                  data-tooltip-sub="Configure Solana Priority Fee / Jito MEV Bribe"
+                  data-tooltip-pos="top"
                 >
                   <span>Fee: {priorityFee}</span>
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -4507,458 +4588,45 @@ export function App() {
 
 
 
-          {/* FLOATING FILLS MODAL */}
-          {fillsModalMint && (() => {
-            const modalItem = groupedTrades.find((g) => g.mint === fillsModalMint);
-            if (!modalItem) return null;
+          </>
+        )}
 
-            const modalPos = positions[modalItem.mint];
-            const modalHoldingTokens = modalPos?.tokens || 0;
-            const isModalSelected = modalItem.mint === mint;
-            const modalUnrealizedPnl = modalHoldingTokens > 0 && isModalSelected && price > 0
-              ? (modalHoldingTokens * price) - (modalPos?.investedUsd || 0)
-              : 0;
-            const modalTotalPnl = modalItem.realizedPnl + modalUnrealizedPnl;
-            const modalPnlColor = modalTotalPnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
-            const modalPnlSign = modalTotalPnl >= 0 ? '+' : '';
-
-            return (
-              <div
-                style={{
-                  position: 'fixed',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  background: 'rgba(0, 0, 0, 0.75)',
-                  backdropFilter: 'blur(3px)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 100,
-                  padding: 16,
-                }}
-                onClick={() => setFillsModalMint(null)}
-              >
-                <div
-                  style={{
-                    width: '100%',
-                    maxWidth: 350,
-                    background: 'linear-gradient(180deg, #131722 0%, #0c0e15 100%)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.04)',
-                    borderRadius: 14,
-                    padding: 16,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 12,
-                    animation: 'fadeIn 0.15s ease',
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* Modal Header: Padre.gg Token Hero & Top-Right Actions */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                      <img
-                        src={`https://axiomtrading-v2.axiom-cdn.io/${modalItem.mint}.webp`}
-                        alt={modalItem.symbol}
-                        style={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: 10,
-                          objectFit: 'cover',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                          background: 'rgba(255, 255, 255, 0.03)',
-                          flexShrink: 0,
-                        }}
-                        onError={(e: any) => {
-                          const target = e.target as HTMLImageElement;
-                          const cdnFallback = `https://cdn.dexscreener.com/token-images/og/solana/${modalItem.mint}`;
-                          if (target.src !== cdnFallback) target.src = cdnFallback;
-                          else target.style.display = 'none';
-                        }}
-                      />
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 16, fontWeight: 900, color: '#fff', letterSpacing: '-0.3px' }}>
-                            ${modalItem.symbol}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 9,
-                              fontWeight: 700,
-                              padding: '2px 6px',
-                              borderRadius: 4,
-                              background: 'rgba(255, 255, 255, 0.06)',
-                              color: 'var(--text-secondary)',
-                              fontFamily: 'monospace',
-                            }}
-                          >
-                            {modalItem.mint.slice(0, 4)}...{modalItem.mint.slice(-4)}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
-                          Trade Fill Analytics
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Top-Right Action Controls: Share Stats + Close */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                      <button
-                        onClick={() => {
-                          const buyTrades = modalItem.trades.filter((t) => t.type === 'BUY');
-                          const sellTrades = modalItem.trades.filter((t) => t.type === 'SELL');
-                          const firstBuyTime = buyTrades.length > 0
-                            ? Math.min(...buyTrades.map((t) => t.timestamp))
-                            : modalItem.trades.length > 0
-                            ? Math.min(...modalItem.trades.map((t) => t.timestamp))
-                            : 0;
-                          const lastSellTime = sellTrades.length > 0
-                            ? Math.max(...sellTrades.map((t) => t.timestamp))
-                            : modalItem.trades.length > 0
-                            ? Math.max(...modalItem.trades.map((t) => t.timestamp))
-                            : 0;
-
-                          setShareModalData({
-                            mint: modalItem.mint,
-                            symbol: modalItem.symbol,
-                            totalBoughtUsd: modalItem.totalBoughtUsd,
-                            totalBoughtTokens: modalItem.totalBoughtTokens,
-                            totalSoldUsd: modalItem.totalSoldUsd,
-                            totalSoldTokens: modalItem.totalSoldTokens,
-                            realizedPnl: modalItem.realizedPnl,
-                            totalPnl: modalTotalPnl,
-                            holdingTokens: modalHoldingTokens,
-                            holdingUsd: modalPos ? modalPos.investedUsd : 0,
-                            solPriceUsd: solPriceUsd || 150,
-                            firstBuyTimestamp: firstBuyTime,
-                            lastSellTimestamp: lastSellTime,
-                          });
-                        }}
-                        title="Share Stats Card"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 5,
-                          padding: '5px 10px',
-                          background: 'rgba(0, 245, 155, 0.12)',
-                          border: '1px solid rgba(0, 245, 155, 0.3)',
-                          borderRadius: 7,
-                          color: 'var(--accent-green)',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
-                        }}
-                        onMouseEnter={(e: any) => {
-                          e.currentTarget.style.background = 'rgba(0, 245, 155, 0.2)';
-                        }}
-                        onMouseLeave={(e: any) => {
-                          e.currentTarget.style.background = 'rgba(0, 245, 155, 0.12)';
-                        }}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                          <polyline points="16 6 12 2 8 6" />
-                          <line x1="12" y1="2" x2="12" y2="15" />
-                        </svg>
-                        <span>Share</span>
-                      </button>
-
-                      <button
-                        onClick={() => setFillsModalMint(null)}
-                        title="Close Modal"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: 26,
-                          height: 26,
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                          borderRadius: 7,
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
-                        }}
-                        onMouseEnter={(e: any) => {
-                          e.currentTarget.style.color = '#fff';
-                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                        }}
-                        onMouseLeave={(e: any) => {
-                          e.currentTarget.style.color = 'var(--text-secondary)';
-                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                        }}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"></line>
-                          <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Summary Metric Ribbon: Padre / Pumpfun Glow Card */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(4, 1fr)',
-                      background: 'rgba(0, 0, 0, 0.45)',
-                      borderRadius: 10,
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                      padding: '10px 4px',
-                      textAlign: 'center',
-                    }}
-                  >
-                    {/* Bought */}
-                    <div style={{ borderRight: '1px solid rgba(255, 255, 255, 0.06)', padding: '0 4px' }}>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Bought</div>
-                      <div className="mono" style={{ fontWeight: 800, fontSize: 12, color: 'var(--accent-green)', marginTop: 2 }}>
-                        ${modalItem.totalBoughtUsd.toFixed(1)}
-                      </div>
-                      <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 1 }}>
-                        {formatTokens(modalItem.totalBoughtTokens)}
-                      </div>
-                    </div>
-
-                    {/* Sold */}
-                    <div style={{ borderRight: '1px solid rgba(255, 255, 255, 0.06)', padding: '0 4px' }}>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Sold</div>
-                      <div className="mono" style={{ fontWeight: 800, fontSize: 12, color: 'var(--accent-red)', marginTop: 2 }}>
-                        ${modalItem.totalSoldUsd.toFixed(1)}
-                      </div>
-                      <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 1 }}>
-                        {formatTokens(modalItem.totalSoldTokens)}
-                      </div>
-                    </div>
-
-                    {/* Holding */}
-                    <div style={{ borderRight: '1px solid rgba(255, 255, 255, 0.06)', padding: '0 4px' }}>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Holding</div>
-                      <div className="mono" style={{ fontWeight: 800, fontSize: 12, color: modalHoldingTokens > 0 ? '#fff' : 'var(--text-muted)', marginTop: 2 }}>
-                        {formatTokens(modalHoldingTokens)}
-                      </div>
-                      <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 1 }}>
-                        {modalPos ? `$${modalPos.investedUsd.toFixed(1)}` : '$0'}
-                      </div>
-                    </div>
-
-                    {/* PnL */}
-                    <div style={{ padding: '0 4px' }}>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>PnL</div>
-                      <div className="mono" style={{ fontWeight: 800, fontSize: 12, color: modalPnlColor, marginTop: 2 }}>
-                        {modalPnlSign}${modalTotalPnl.toFixed(2)}
-                      </div>
-                      <div style={{ fontSize: 8, color: modalPnlColor, marginTop: 1, fontWeight: 700 }}>
-                        {modalItem.totalBoughtUsd > 0
-                          ? `${modalPnlSign}${((modalTotalPnl / modalItem.totalBoughtUsd) * 100).toFixed(1)}%`
-                          : '0%'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* List of Individual Fills */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
-                      <span>Order Book History</span>
-                      <span style={{ fontFamily: 'monospace' }}>{modalItem.trades.length} fills</span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 180, overflowY: 'auto', paddingRight: 2 }}>
-                      {modalItem.trades.map((t) => (
-                        <div
-                          key={t.id}
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            fontSize: 11,
-                            padding: '7px 10px',
-                            background: t.type === 'BUY' ? 'rgba(0, 245, 155, 0.03)' : 'rgba(255, 75, 75, 0.03)',
-                            border: `1px solid ${t.type === 'BUY' ? 'rgba(0, 245, 155, 0.12)' : 'rgba(255, 75, 75, 0.12)'}`,
-                            borderRadius: 6,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span
-                              style={{
-                                fontSize: 9,
-                                fontWeight: 800,
-                                padding: '1px 5px',
-                                borderRadius: 4,
-                                background: t.type === 'BUY' ? 'rgba(0, 245, 155, 0.15)' : 'rgba(255, 75, 75, 0.15)',
-                                color: t.type === 'BUY' ? 'var(--accent-green)' : 'var(--accent-red)',
-                                letterSpacing: '0.3px',
-                              }}
-                            >
-                              {t.type}
-                            </span>
-                            <span className="mono" style={{ color: 'var(--text-secondary)', fontSize: 10 }}>
-                              {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                            </span>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div className="mono" style={{ fontWeight: 800, color: '#fff', fontSize: 11 }}>
-                              ${t.amountUsd.toFixed(2)}
-                            </div>
-                            <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 9 }}>
-                              @{formatPrice(t.effectivePrice || t.price)}
-                              {t.priceImpactPct && t.priceImpactPct > 0.05 ? ` (${t.priceImpactPct.toFixed(1)}% imp)` : ''}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Action Buttons: Axiom, DexScreener, Solscan Logos */}
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', paddingTop: 2 }}>
-                    {/* Axiom Button */}
-                    <a
-                      href={`https://axiom.trade/meme/${modalItem.mint}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Open on Axiom.trade"
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '8px 0',
-                        background: 'rgba(0, 245, 155, 0.06)',
-                        border: '1px solid rgba(0, 245, 155, 0.22)',
-                        borderRadius: 8,
-                        textDecoration: 'none',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="10" stroke="#00f59b" strokeWidth="2" />
-                        <path d="M12 7L16 16H8L12 7Z" fill="#00f59b" />
-                      </svg>
-                    </a>
-
-                    {/* DexScreener Button */}
-                    <a
-                      href={`https://dexscreener.com/solana/${modalItem.mint}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Open on DexScreener"
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '8px 0',
-                        background: 'rgba(56, 189, 248, 0.06)',
-                        border: '1px solid rgba(56, 189, 248, 0.22)',
-                        borderRadius: 8,
-                        textDecoration: 'none',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                        <path
-                          d="M4 14C4 9.58 7.58 6 12 6C16.42 6 20 9.58 20 14V17C20 18.1 19.1 19 18 19H6C4.9 19 4 18.1 4 17V14Z"
-                          stroke="#38bdf8"
-                          strokeWidth="2"
-                        />
-                        <circle cx="9" cy="13" r="1.5" fill="#38bdf8" />
-                        <circle cx="15" cy="13" r="1.5" fill="#38bdf8" />
-                        <path d="M11 16H13" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                    </a>
-
-                    {/* Solscan Button */}
-                    <a
-                      href={`https://solscan.io/token/${modalItem.mint}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Open on Solscan Explorer"
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '8px 0',
-                        background: 'rgba(168, 85, 247, 0.06)',
-                        border: '1px solid rgba(168, 85, 247, 0.22)',
-                        borderRadius: 8,
-                        textDecoration: 'none',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                        <circle cx="11" cy="11" r="7" stroke="#a855f7" strokeWidth="2" />
-                        <path d="M16.5 16.5L20.5 20.5" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" />
-                        <path d="M9 11C9 9.89 9.89 9 11 9" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                    </a>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-      </div>
-
-      {/* FIXED FLOATING OVERLAY DRAWER FOR ACTIVE TABS */}
-      {activeTab !== 'TRADE' && (
-        <>
-          {/* Backdrop click to dismiss overlay back to TRADE */}
-          <div
-            onClick={() => setActiveTab('TRADE')}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 48,
-              zIndex: 34,
-              background: 'rgba(0, 0, 0, 0.45)',
-              backdropFilter: 'blur(2px)',
-              WebkitBackdropFilter: 'blur(2px)',
+        {/* VIEW 2: FULL-PAGE WALLET TRACKER */}
+        {activeTab === 'TRACKER' && (
+          <TrackerView
+            solPriceUsd={solPriceUsd}
+            onSelectToken={(selectedMint) => {
+              setMint(selectedMint);
+              setActiveTab('TRADE');
+              flashToast('Loaded token into Trade terminal');
+            }}
+            flashToast={flashToast}
+            onNewEventNotification={() => {
+              if (activeTab !== 'TRACKER') {
+                setUnreadTrackerCount((prev) => prev + 1);
+              }
             }}
           />
+        )}
 
-          {/* Fixed Height Overlay Drawer Box */}
-          <div
-            style={{
-              position: 'fixed',
-              bottom: 48,
-              left: 0,
-              right: 0,
-              height: 380,
-              zIndex: 35,
-              background: '#0d1017',
-              borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-              boxShadow: '0 -8px 30px rgba(0, 0, 0, 0.75)',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'flex-start',
-              animation: 'fadeIn 0.15s ease',
-            }}
-          >
-            {/* Overlay Header Bar */}
+        {/* VIEW 3: FULL-PAGE HISTORY (STATS & FILLS) */}
+        {activeTab === 'HISTORY' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, animation: 'fadeIn 0.15s ease' }}>
+            {/* 1. Session Performance Header */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '10px 14px',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                padding: '8px 10px',
                 background: 'rgba(255, 255, 255, 0.02)',
-                flexShrink: 0,
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                borderRadius: 8,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: '#fff', letterSpacing: '0.3px', textTransform: 'uppercase' }}>
-                  {activeTab === 'POSITIONS' && 'Open Positions'}
-                  {activeTab === 'HISTORY' && 'Trade Fills'}
-                  {activeTab === 'STATS' && 'Session Performance'}
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                  Session Performance
                 </span>
                 <span
                   style={{
@@ -4970,476 +4638,322 @@ export function App() {
                     color: 'var(--text-muted)',
                   }}
                 >
-                  {activeTab === 'POSITIONS' && `${Object.keys(positions).length} tokens`}
-                  {activeTab === 'HISTORY' && `${groupedTrades.length} tokens`}
-                  {activeTab === 'STATS' && `${analytics.totalClosedCount} closed`}
+                  {analytics.totalClosedCount} closed
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {activeTab === 'STATS' && (
-                  <button
-                    onClick={handleShareWalletStats}
-                    title="Share Wallet Performance Card"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '3px 8px',
-                      background: 'rgba(0, 245, 155, 0.12)',
-                      border: '1px solid rgba(0, 245, 155, 0.28)',
-                      borderRadius: 6,
-                      color: 'var(--accent-green)',
-                      fontSize: 10.5,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                    onMouseEnter={(e: any) => (e.currentTarget.style.background = 'rgba(0, 245, 155, 0.2)')}
-                    onMouseLeave={(e: any) => (e.currentTarget.style.background = 'rgba(0, 245, 155, 0.12)')}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                      <polyline points="16 6 12 2 8 6" />
-                      <line x1="12" y1="2" x2="12" y2="15" />
-                    </svg>
-                    <span>Share</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => setActiveTab('TRADE')}
-                  title="Close"
-                  aria-label="Close"
+            </div>
+
+            {/* Share Performance Card Banner Button */}
+            <button
+              onClick={handleShareWalletStats}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                width: '100%',
+                padding: '9px 0',
+                background: 'rgba(0, 245, 155, 0.08)',
+                border: '1px solid rgba(0, 245, 155, 0.25)',
+                borderRadius: 8,
+                color: 'var(--accent-green)',
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e: any) => (e.currentTarget.style.background = 'rgba(0, 245, 155, 0.16)')}
+              onMouseLeave={(e: any) => (e.currentTarget.style.background = 'rgba(0, 245, 155, 0.08)')}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
+              </svg>
+              <span>Share Portfolio Performance Card</span>
+            </button>
+
+            {/* Header Banner: Win Rate & Profit Factor */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: 6,
+                background: 'rgba(0, 0, 0, 0.3)',
+                padding: '10px 8px',
+                borderRadius: 8,
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                textAlign: 'center',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Win Rate</div>
+                <div
+                  className="mono"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    color: 'var(--text-secondary)',
-                    borderRadius: 6,
-                    width: 22,
-                    height: 22,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    padding: 0,
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: analytics.winRate >= 50 ? 'var(--accent-green)' : analytics.totalClosedCount === 0 ? '#fff' : 'var(--accent-red)',
+                    marginTop: 2,
                   }}
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
+                  {analytics.totalClosedCount > 0 ? `${analytics.winRate.toFixed(0)}%` : '---'}
+                </div>
+                <div style={{ fontSize: 8.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {analytics.winTradesCount}W / {analytics.totalClosedCount - analytics.winTradesCount}L
+                </div>
+              </div>
+
+              <div style={{ borderLeft: '1px solid rgba(255, 255, 255, 0.06)', borderRight: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Realized PnL</div>
+                <div
+                  className="mono"
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: analytics.totalRealizedPnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+                    marginTop: 2,
+                  }}
+                >
+                  {analytics.totalRealizedPnl >= 0 ? '+' : ''}${analytics.totalRealizedPnl.toFixed(2)}
+                </div>
+                <div style={{ fontSize: 8.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {analytics.totalRealizedPnl >= 0 ? '+' : ''}{(analytics.totalRealizedPnl / (solPriceUsd || 150)).toFixed(3)} SOL
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Profit Factor</div>
+                <div
+                  className="mono"
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: analytics.profitFactor >= 1.5 ? 'var(--accent-green)' : analytics.profitFactor >= 1 ? '#8ba2ff' : 'var(--accent-red)',
+                    marginTop: 2,
+                  }}
+                >
+                  {analytics.totalLosses > 0 ? analytics.profitFactor.toFixed(2) : analytics.totalGains > 0 ? '∞' : '---'}
+                </div>
+                <div style={{ fontSize: 8.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                  Gains / Losses
+                </div>
               </div>
             </div>
 
-            {/* Scrollable Content Container: Fills strictly from top */}
+            {/* Account Growth & Volume Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+              <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Account Return</div>
+                <div
+                  className="mono"
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: analytics.balancePnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+                    marginTop: 3,
+                  }}
+                >
+                  {analytics.balancePnl >= 0 ? '+' : ''}{analytics.balancePnl.toFixed(3)} SOL ({analytics.balancePnlPct >= 0 ? '+' : ''}{analytics.balancePnlPct.toFixed(1)}%)
+                </div>
+                <div style={{ fontSize: 8.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                  ≈ {analytics.balancePnl >= 0 ? '+' : ''}${ (analytics.balancePnl * (solPriceUsd || 150)).toFixed(2) } USD
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Turnover</div>
+                <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginTop: 3 }}>
+                  ${analytics.totalVolume.toFixed(2)}
+                </div>
+                <div style={{ fontSize: 8.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {analytics.totalBuysCount} buys · {analytics.totalSellsCount} sells
+                </div>
+              </div>
+            </div>
+
+            {/* Best Win & Worst Loss */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+              <div style={{ background: 'rgba(0, 245, 155, 0.04)', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(0, 245, 155, 0.15)' }}>
+                <div style={{ fontSize: 9, color: 'var(--accent-green)', fontWeight: 700, textTransform: 'uppercase' }}>
+                  Best Win
+                </div>
+                {analytics.bestTrade && (analytics.bestTrade.realizedPnl || 0) > 0 ? (
+                  <div style={{ marginTop: 4 }}>
+                    <div style={{ fontWeight: 800, fontSize: 12, color: '#fff' }}>
+                      ${analytics.bestTrade.symbol}
+                    </div>
+                    <div className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-green)', marginTop: 2 }}>
+                      +${(analytics.bestTrade.realizedPnl || 0).toFixed(2)}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>No wins yet</div>
+                )}
+              </div>
+
+              <div style={{ background: 'rgba(239, 68, 68, 0.04)', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                <div style={{ fontSize: 9, color: 'var(--accent-red)', fontWeight: 700, textTransform: 'uppercase' }}>
+                  Worst Loss
+                </div>
+                {analytics.worstTrade && (analytics.worstTrade.realizedPnl || 0) < 0 ? (
+                  <div style={{ marginTop: 4 }}>
+                    <div style={{ fontWeight: 800, fontSize: 12, color: '#fff' }}>
+                      ${analytics.worstTrade.symbol}
+                    </div>
+                    <div className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-red)', marginTop: 2 }}>
+                      -${Math.abs(analytics.worstTrade.realizedPnl || 0).toFixed(2)}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>No losses yet</div>
+                )}
+              </div>
+            </div>
+
+            {/* Win / Loss Ratio bar */}
+            {analytics.totalClosedCount > 0 && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: 'var(--text-muted)', marginBottom: 4 }}>
+                  <span>Win / Loss Ratio</span>
+                  <span className="mono">{analytics.winTradesCount} / {analytics.totalClosedCount}</span>
+                </div>
+                <div style={{ display: 'flex', height: 5, borderRadius: 3, overflow: 'hidden', background: 'rgba(255, 255, 255, 0.05)' }}>
+                  <div style={{ width: `${analytics.winRate}%`, background: 'var(--accent-green)', transition: 'width 0.3s' }} />
+                  <div style={{ width: `${100 - analytics.winRate}%`, background: 'var(--accent-red)', transition: 'width 0.3s' }} />
+                </div>
+              </div>
+            )}
+
+            {/* 2. Trade Fills Header */}
             <div
               style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: 12,
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'flex-start',
-                gap: 8,
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 10px',
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                borderRadius: 8,
+                marginTop: 4,
               }}
             >
-              {/* POSITIONS VIEW */}
-              {activeTab === 'POSITIONS' && (
-                <>
-                  {Object.keys(positions).length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '36px 0', fontSize: 11, color: 'var(--text-muted)' }}>
-                      No open positions yet.
-                    </div>
-                  ) : (
-                    Object.values(positions).map((pos) => {
-                      const isSelected = pos.mint === mint;
-                      const posPrice = isSelected && price > 0
-                        ? price
-                        : (positionPrices[pos.mint] || pos.entryPrice);
-                      const posValUsd = pos.tokens * posPrice;
-                      const posValSol = posValUsd / (solPriceUsd || 150);
-                      const posPnlUsd = posValUsd - pos.investedUsd;
-                      const posPnlSol = posPnlUsd / (solPriceUsd || 150);
-                      const posPnlPct = pos.investedUsd > 0 ? (posPnlUsd / pos.investedUsd) * 100 : 0;
-                      const isProfit = posPnlUsd >= 0;
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                  Trade Fills
+                </span>
+                <span
+                  style={{
+                    fontSize: 9.5,
+                    fontFamily: 'monospace',
+                    padding: '1px 6px',
+                    borderRadius: 4,
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  {groupedTrades.length} tokens
+                </span>
+              </div>
+              <div className="mono" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                {tradeHistory.length} total orders
+              </div>
+            </div>
 
-                      return (
-                        <div
-                          key={pos.mint}
-                          style={{
-                            padding: '9px 12px',
-                            background: isSelected ? 'rgba(0, 245, 155, 0.03)' : 'rgba(255, 255, 255, 0.02)',
-                            border: `1px solid ${isSelected ? 'rgba(0, 245, 155, 0.25)' : 'rgba(255, 255, 255, 0.05)'}`,
-                            borderRadius: 8,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {/* Header: Token Symbol, status, and value */}
-                          <div
-                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', cursor: 'pointer' }}
-                            onClick={() => {
-                              if (pos.mint !== mint) setMint(pos.mint);
-                              setActiveTab('TRADE');
-                            }}
-                            title="Click to view token in terminal"
-                          >
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontWeight: 800, fontSize: 13, color: '#fff' }}>${pos.symbol}</span>
-                                {isSelected && (
-                                  <span style={{ fontSize: 8.5, padding: '1px 4px', borderRadius: 3, background: 'rgba(0, 245, 155, 0.12)', color: 'var(--accent-green)', fontWeight: 700 }}>
-                                    Active
-                                  </span>
-                                )}
-                              </div>
-                              <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2 }}>
-                                {formatTokens(pos.tokens)} · Now {formatPrice(posPrice)} · Entry {formatPrice(pos.entryPrice)}
-                              </div>
-                            </div>
+            {/* Fills List */}
+            {groupedTrades.length === 0 ? (
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '48px 16px',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.05)',
+                  borderRadius: 10,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <div style={{ fontSize: 24 }}>📜</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>No trade history yet</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 240, lineHeight: 1.4 }}>
+                  Your completed buy and sell orders will be recorded here with realized PnL.
+                </div>
+              </div>
+            ) : (
+              groupedTrades.map((item) => {
+                const pos = positions[item.mint];
+                const holdingTokens = pos?.tokens || 0;
+                const isSelected = item.mint === mint;
+                const effectivePrice = isSelected && price > 0
+                  ? price
+                  : (positionPrices[item.mint] || pos?.entryPrice || 0);
+                const unrealizedPnl = holdingTokens > 0 && effectivePrice > 0
+                  ? (holdingTokens * effectivePrice) - (pos?.investedUsd || 0)
+                  : 0;
+                const totalPnlUsd = item.realizedPnl + unrealizedPnl;
+                const totalPnlSol = totalPnlUsd / (solPriceUsd || 150);
+                const pnlColor = totalPnlUsd >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+                const pnlSign = totalPnlUsd >= 0 ? '+' : '';
 
-                            <div style={{ textAlign: 'right' }}>
-                              <div className="mono" style={{ fontSize: 12, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
-                                <img
-                                  src="https://axiom-assets-v2.axiom-cdn.io/images/sol-fill.svg"
-                                  alt="SOL"
-                                  style={{ width: 10, height: 10 }}
-                                />
-                                <span>{posValSol.toFixed(3)}</span>
-                              </div>
-                              <div
-                                className="mono"
-                                style={{
-                                  fontSize: 9.5,
-                                  fontWeight: 700,
-                                  color: isProfit ? 'var(--accent-green)' : 'var(--accent-red)',
-                                  marginTop: 1,
-                                }}
-                              >
-                                {isProfit ? '+' : ''}{posPnlSol.toFixed(3)} ({isProfit ? '+' : ''}{posPnlPct.toFixed(1)}%)
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Quick Sell Controls */}
-                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                            {[25, 50, 100].map((pct) => (
-                              <button
-                                key={pct}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  executeSellForBag(pos, pct);
-                                }}
-                                className="btn-preset-sell mono"
-                                style={{ flex: 1, padding: '5px 2px', fontSize: 10, fontWeight: 700 }}
-                                title={`Sell ${pct}% of ${pos.symbol}`}
-                              >
-                                {pct}%
-                              </button>
-                            ))}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                executeSellInitialForBag(pos);
-                              }}
-                              disabled={pos.investedUsd <= 0}
-                              style={{
-                                background: 'rgba(255, 149, 0, 0.08)',
-                                border: '1px solid rgba(255, 149, 0, 0.25)',
-                                color: 'var(--accent-orange)',
-                                borderRadius: 6,
-                                fontSize: 10,
-                                fontWeight: 700,
-                                padding: '5px 6px',
-                                cursor: pos.investedUsd <= 0 ? 'not-allowed' : 'pointer',
-                                opacity: pos.investedUsd <= 0 ? 0.35 : 1,
-                                whiteSpace: 'nowrap',
-                              }}
-                              title="Sell initial investment to make remainder risk-free"
-                            >
-                              Initial
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </>
-              )}
-
-              {/* HISTORY VIEW (FILLS - GROUPED BY MINT) */}
-              {activeTab === 'HISTORY' && (
-                <>
-                  {groupedTrades.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '36px 0', fontSize: 11, color: 'var(--text-muted)' }}>
-                      No trades recorded yet.
-                    </div>
-                  ) : (
-                    groupedTrades.map((item) => {
-                      const pos = positions[item.mint];
-                      const holdingTokens = pos?.tokens || 0;
-                      const isSelected = item.mint === mint;
-                      const effectivePrice = isSelected && price > 0
-                        ? price
-                        : (positionPrices[item.mint] || pos?.entryPrice || 0);
-                      const unrealizedPnl = holdingTokens > 0 && effectivePrice > 0
-                        ? (holdingTokens * effectivePrice) - (pos?.investedUsd || 0)
-                        : 0;
-                      const totalPnlUsd = item.realizedPnl + unrealizedPnl;
-                      const totalPnlSol = totalPnlUsd / (solPriceUsd || 150);
-                      const pnlColor = totalPnlUsd >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
-                      const pnlSign = totalPnlUsd >= 0 ? '+' : '';
-
-                      return (
-                        <div
-                          key={item.mint}
-                          onClick={() => {
-                            setFillsModalMint(item.mint);
-                            if (item.mint !== mint) {
-                              setMint(item.mint);
-                            }
-                          }}
-                          style={{
-                            background: isSelected ? 'rgba(56, 189, 248, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-                            border: `1px solid ${isSelected ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.06)'}`,
-                            borderRadius: 8,
-                            padding: '9px 12px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            transition: 'all 0.15s ease',
-                            flexShrink: 0,
-                          }}
-                        >
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontWeight: 800, fontSize: 13, color: '#fff' }}>
-                                ${item.symbol}
-                              </span>
-                              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-                                {item.trades.length} {item.trades.length === 1 ? 'fill' : 'fills'}
-                              </span>
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
-                              Bought: <span className="mono" style={{ fontWeight: 600, color: '#fff' }}>${item.totalBoughtUsd.toFixed(2)}</span>
-                            </div>
-                          </div>
-
-                          <div style={{ textAlign: 'right' }}>
-                            <div className="mono" style={{ fontSize: 12, fontWeight: 800, color: pnlColor, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
-                              <span>{pnlSign}{totalPnlSol.toFixed(3)}</span>
-                              <img
-                                src="https://axiom-assets-v2.axiom-cdn.io/images/sol-fill.svg"
-                                alt="SOL"
-                                style={{ width: 10, height: 10 }}
-                              />
-                            </div>
-                            <div className="mono" style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 1 }}>
-                              {pnlSign}${totalPnlUsd.toFixed(2)}
-                              {item.totalBoughtUsd > 0 ? ` (${pnlSign}${((totalPnlUsd / item.totalBoughtUsd) * 100).toFixed(1)}%)` : ''}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </>
-              )}
-
-              {/* STATS VIEW */}
-              {activeTab === 'STATS' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {/* Share Performance Card Banner Button */}
-                  <button
-                    onClick={handleShareWalletStats}
+                return (
+                  <div
+                    key={item.mint}
+                    onClick={() => {
+                      setFillsModalMint(item.mint);
+                      if (item.mint !== mint) {
+                        setMint(item.mint);
+                      }
+                    }}
                     style={{
+                      background: isSelected ? 'rgba(56, 189, 248, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+                      border: `1px solid ${isSelected ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.06)'}`,
+                      borderRadius: 8,
+                      padding: '10px 12px',
+                      cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                      width: '100%',
-                      padding: '8px 0',
-                      background: 'rgba(0, 245, 155, 0.08)',
-                      border: '1px solid rgba(0, 245, 155, 0.25)',
-                      borderRadius: 8,
-                      color: 'var(--accent-green)',
-                      fontSize: 11,
-                      fontWeight: 800,
-                      cursor: 'pointer',
+                      justifyContent: 'space-between',
                       transition: 'all 0.15s ease',
                     }}
-                    onMouseEnter={(e: any) => (e.currentTarget.style.background = 'rgba(0, 245, 155, 0.16)')}
-                    onMouseLeave={(e: any) => (e.currentTarget.style.background = 'rgba(0, 245, 155, 0.08)')}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                      <polyline points="16 6 12 2 8 6" />
-                      <line x1="12" y1="2" x2="12" y2="15" />
-                    </svg>
-                    <span>Share Portfolio Performance Card</span>
-                  </button>
-
-                  {/* Header Banner: Win Rate & Profit Factor */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(3, 1fr)',
-                      gap: 6,
-                      background: 'rgba(0, 0, 0, 0.3)',
-                      padding: '8px 6px',
-                      borderRadius: 7,
-                      border: '1px solid rgba(255, 255, 255, 0.05)',
-                      textAlign: 'center',
-                    }}
                   >
                     <div>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Win Rate</div>
-                      <div
-                        className="mono"
-                        style={{
-                          fontSize: 15,
-                          fontWeight: 800,
-                          color: analytics.winRate >= 50 ? 'var(--accent-green)' : analytics.totalClosedCount === 0 ? '#fff' : 'var(--accent-red)',
-                          marginTop: 2,
-                        }}
-                      >
-                        {analytics.totalClosedCount > 0 ? `${analytics.winRate.toFixed(1)}%` : '---'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontWeight: 800, fontSize: 13, color: '#fff' }}>
+                          ${item.symbol}
+                        </span>
+                        <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+                          {item.trades.length} {item.trades.length === 1 ? 'fill' : 'fills'}
+                        </span>
                       </div>
-                      <div style={{ fontSize: 8, color: 'var(--text-muted)' }}>
-                        {analytics.winTradesCount}W - {analytics.lossTradesCount}L
+                      <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
+                        Bought: <span className="mono" style={{ fontWeight: 600, color: '#fff' }}>${item.totalBoughtUsd.toFixed(2)}</span>
                       </div>
                     </div>
 
-                    <div style={{ borderLeft: '1px solid rgba(255, 255, 255, 0.06)', borderRight: '1px solid rgba(255, 255, 255, 0.06)' }}>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Realized PnL</div>
-                      <div
-                        className="mono"
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 800,
-                          color: analytics.totalRealizedPnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
-                          marginTop: 3,
-                        }}
-                      >
-                        {analytics.totalRealizedPnl >= 0 ? '+' : ''}${analytics.totalRealizedPnl.toFixed(2)}
+                    <div style={{ textAlign: 'right' }}>
+                      <div className="mono" style={{ fontSize: 12, fontWeight: 800, color: pnlColor, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                        <span>{pnlSign}{totalPnlSol.toFixed(3)}</span>
+                        <img
+                          src="https://axiom-assets-v2.axiom-cdn.io/images/sol-fill.svg"
+                          alt="SOL"
+                          style={{ width: 10, height: 10 }}
+                        />
                       </div>
-                      <div style={{ fontSize: 8, color: 'var(--text-muted)' }}>
-                        Closed Trades
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Profit Factor</div>
-                      <div
-                        className="mono"
-                        style={{
-                          fontSize: 15,
-                          fontWeight: 800,
-                          color: analytics.profitFactor >= 1.5 ? 'var(--accent-green)' : analytics.profitFactor >= 1 ? '#8ba2ff' : 'var(--accent-red)',
-                          marginTop: 2,
-                        }}
-                      >
-                        {analytics.totalLosses > 0 ? analytics.profitFactor.toFixed(2) : analytics.totalGains > 0 ? '∞' : '---'}
-                      </div>
-                      <div style={{ fontSize: 8, color: 'var(--text-muted)' }}>
-                        Gains / Losses
+                      <div className="mono" style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 1 }}>
+                        {pnlSign}${totalPnlUsd.toFixed(2)}
+                        {item.totalBoughtUsd > 0 ? ` (${pnlSign}${((totalPnlUsd / item.totalBoughtUsd) * 100).toFixed(1)}%)` : ''}
                       </div>
                     </div>
                   </div>
-
-                  {/* Account Growth & Volume Stats */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
-                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '6px 8px', borderRadius: 6, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Account Return</div>
-                      <div
-                        className="mono"
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: analytics.balancePnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
-                          marginTop: 2,
-                        }}
-                      >
-                        {analytics.balancePnl >= 0 ? '+' : ''}{analytics.balancePnl.toFixed(3)} SOL ({analytics.balancePnlPct >= 0 ? '+' : ''}{analytics.balancePnlPct.toFixed(1)}%)
-                      </div>
-                      <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 1 }}>
-                        ≈ {analytics.balancePnl >= 0 ? '+' : ''}${ (analytics.balancePnl * (solPriceUsd || 150)).toFixed(2) } USD
-                      </div>
-                    </div>
-
-                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '6px 8px', borderRadius: 6, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Turnover</div>
-                      <div className="mono" style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginTop: 2 }}>
-                        ${analytics.totalVolume.toFixed(2)}
-                      </div>
-                      <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 1 }}>
-                        {analytics.totalBuysCount} buys · {analytics.totalSellsCount} sells
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Best Win & Worst Loss */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
-                    <div style={{ background: 'rgba(0, 245, 155, 0.04)', padding: '6px 8px', borderRadius: 6, border: '1px solid rgba(0, 245, 155, 0.15)' }}>
-                      <div style={{ fontSize: 9, color: 'var(--accent-green)', fontWeight: 700, textTransform: 'uppercase' }}>
-                        Best Win
-                      </div>
-                      {analytics.bestTrade && (analytics.bestTrade.realizedPnl || 0) > 0 ? (
-                        <div style={{ marginTop: 3 }}>
-                          <div style={{ fontWeight: 800, fontSize: 11, color: '#fff' }}>
-                            ${analytics.bestTrade.symbol}
-                          </div>
-                          <div className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-green)', marginTop: 1 }}>
-                            +${(analytics.bestTrade.realizedPnl || 0).toFixed(2)}
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>No wins yet</div>
-                      )}
-                    </div>
-
-                    <div style={{ background: 'rgba(239, 68, 68, 0.04)', padding: '6px 8px', borderRadius: 6, border: '1px solid rgba(239, 68, 68, 0.15)' }}>
-                      <div style={{ fontSize: 9, color: 'var(--accent-red)', fontWeight: 700, textTransform: 'uppercase' }}>
-                        Worst Loss
-                      </div>
-                      {analytics.worstTrade && (analytics.worstTrade.realizedPnl || 0) < 0 ? (
-                        <div style={{ marginTop: 3 }}>
-                          <div style={{ fontWeight: 800, fontSize: 11, color: '#fff' }}>
-                            ${analytics.worstTrade.symbol}
-                          </div>
-                          <div className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-red)', marginTop: 1 }}>
-                            -${Math.abs(analytics.worstTrade.realizedPnl || 0).toFixed(2)}
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>No losses yet</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Win / Loss Ratio bar */}
-                  {analytics.totalClosedCount > 0 && (
-                    <div style={{ marginTop: 2 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginBottom: 3 }}>
-                        <span>Win / Loss Ratio</span>
-                        <span className="mono">{analytics.winTradesCount} / {analytics.totalClosedCount}</span>
-                      </div>
-                      <div style={{ display: 'flex', height: 4, borderRadius: 2, overflow: 'hidden', background: 'rgba(255, 255, 255, 0.05)' }}>
-                        <div style={{ width: `${analytics.winRate}%`, background: 'var(--accent-green)', transition: 'width 0.3s' }} />
-                        <div style={{ width: `${100 - analytics.winRate}%`, background: 'var(--accent-red)', transition: 'width 0.3s' }} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                );
+              })
+            )}
           </div>
-        </>
-      )}
+        )}
+
+      </div>
 
       {/* 8. FIXED FLOATING BOTTOM DOCK: CAPSULE NAVIGATION TABS */}
       <nav
@@ -5471,22 +4985,23 @@ export function App() {
           }}
         >
           {[
-            { id: 'TRADE', label: 'Terminal' },
-            { id: 'POSITIONS', label: 'Positions', badge: Object.keys(positions).length },
-            { id: 'HISTORY', label: 'Fills', badge: groupedTrades.length },
-            { id: 'STATS', label: 'Stats' },
+            { id: 'TRADE', label: 'Trade', tip: 'Trading Terminal', sub: 'Execute paper trades with real-time Solana DEX prices' },
+            { id: 'TRACKER', label: 'Tracker', badge: unreadTrackerCount > 0 ? unreadTrackerCount : undefined, tip: 'Wallet Tracker', sub: 'Live on-chain transaction feed and copy-trading' },
+            { id: 'HISTORY', label: 'History', badge: groupedTrades.length, tip: 'Trade History', sub: 'Past orders, execution stats & realized PnL' },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => {
-                  if (isActive && tab.id !== 'TRADE') {
-                    setActiveTab('TRADE');
-                  } else {
-                    setActiveTab(tab.id as any);
+                  setActiveTab(tab.id as any);
+                  if (tab.id === 'TRACKER') {
+                    setUnreadTrackerCount(0);
                   }
                 }}
+                data-tooltip={tab.tip}
+                data-tooltip-sub={tab.sub}
+                data-tooltip-pos="top"
                 style={{
                   flex: 1,
                   padding: '7px 0',
@@ -5527,14 +5042,350 @@ export function App() {
         </div>
       </nav>
 
-      {/* 9. FLOATING BOTTOM-RIGHT TOAST NOTIFICATION POPUP WITH TIMER LINE */}
+      {/* 9. FLOATING BOTTOM-RIGHT OPEN POSITIONS CIRCLE BUTTON (ONLY ON TERMINAL TAB) */}
+      {activeTab === 'TRADE' && (
+        <button
+          onClick={togglePositionsPopup}
+          data-tooltip="Open Positions"
+          data-tooltip-sub={`${Object.keys(positions).length} active trades - Click to expand`}
+          data-tooltip-pos="left"
+          style={{
+            position: 'fixed',
+            bottom: 65,
+            right: 12,
+            width: 44,
+            height: 44,
+            borderRadius: '50%',
+            background: showPositionsPopup && !isPositionsPopupClosing
+              ? 'linear-gradient(135deg, #00f59b, #00c278)'
+              : 'linear-gradient(135deg, rgba(22, 28, 40, 0.96), rgba(12, 16, 24, 0.98))',
+            border: showPositionsPopup && !isPositionsPopupClosing
+              ? '1px solid #00f59b'
+              : '1px solid rgba(0, 245, 155, 0.35)',
+            color: showPositionsPopup && !isPositionsPopupClosing ? '#0a0d14' : 'var(--accent-green)',
+            boxShadow: showPositionsPopup && !isPositionsPopupClosing
+              ? '0 0 20px rgba(0, 245, 155, 0.5), 0 4px 14px rgba(0, 0, 0, 0.6)'
+              : '0 4px 18px rgba(0, 0, 0, 0.6), 0 0 10px rgba(0, 245, 155, 0.2)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 45,
+            transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+            transform: showPositionsPopup && !isPositionsPopupClosing ? 'scale(1.06)' : 'scale(1)',
+          }}
+          onMouseEnter={(e: any) => {
+            if (!showPositionsPopup || isPositionsPopupClosing) {
+              e.currentTarget.style.borderColor = 'rgba(0, 245, 155, 0.7)';
+              e.currentTarget.style.transform = 'scale(1.08)';
+            }
+          }}
+          onMouseLeave={(e: any) => {
+            if (!showPositionsPopup || isPositionsPopupClosing) {
+              e.currentTarget.style.borderColor = 'rgba(0, 245, 155, 0.35)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+          </svg>
+
+          {/* Notification Badge with Position Count */}
+          {Object.keys(positions).length > 0 && (
+            <span
+              className="mono"
+              style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                minWidth: 18,
+                height: 18,
+                borderRadius: 9,
+                padding: '0 4px',
+                background: portfolioStats.openPositionsPnlSol >= 0 ? '#00f59b' : '#ef4444',
+                color: portfolioStats.openPositionsPnlSol >= 0 ? '#0a0d14' : '#fff',
+                fontSize: 9.5,
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '2px solid #0d1117',
+                lineHeight: 1,
+                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.5)',
+              }}
+            >
+              {Object.keys(positions).length}
+            </span>
+          )}
+        </button>
+      )}
+
+      {/* 10. FLOATING OPEN POSITIONS POPUP */}
+      {showPositionsPopup && activeTab === 'TRADE' && (
+        <>
+          <div
+            onClick={closePositionsPopup}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 48,
+              background: 'rgba(0, 0, 0, 0.35)',
+              animation: `${isPositionsPopupClosing ? 'popupBackdropOut' : 'popupBackdropIn'} 0.18s ease forwards`,
+            }}
+          />
+
+          <div
+            style={{
+              position: 'fixed',
+              bottom: 118,
+              left: 12,
+              right: 12,
+              maxHeight: 'min(440px, calc(100vh - 140px))',
+              background: 'rgba(13, 16, 24, 0.98)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: 12,
+              boxShadow: '0 16px 40px rgba(0, 0, 0, 0.75), 0 0 20px rgba(0, 245, 155, 0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              zIndex: 49,
+              transformOrigin: 'bottom right',
+              animation: `${isPositionsPopupClosing ? 'popupOut 0.18s cubic-bezier(0.16, 1, 0.3, 1)' : 'popupIn 0.22s cubic-bezier(0.16, 1, 0.3, 1)'} forwards`,
+              overflow: 'hidden',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                  Open Positions
+                </span>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 9.5,
+                    fontWeight: 800,
+                    padding: '1px 6px',
+                    borderRadius: 10,
+                    background: 'rgba(0, 245, 155, 0.15)',
+                    color: 'var(--accent-green)',
+                  }}
+                >
+                  {Object.keys(positions).length}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {Object.keys(positions).length > 0 && (
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: portfolioStats.openPositionsPnlSol >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+                    }}
+                  >
+                    {portfolioStats.openPositionsPnlSol >= 0 ? '+' : ''}{portfolioStats.openPositionsPnlSol.toFixed(3)} SOL ({portfolioStats.openPositionsPnlSol >= 0 ? '+' : ''}{portfolioStats.openPositionsPnlPct.toFixed(1)}%)
+                  </div>
+                )}
+                <button
+                  onClick={closePositionsPopup}
+                  data-tooltip="Close"
+                  data-tooltip-pos="bottom"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onMouseEnter={(e: any) => (e.currentTarget.style.color = '#fff')}
+                  onMouseLeave={(e: any) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content / Positions List */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '10px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              {Object.keys(positions).length === 0 ? (
+                <div
+                  style={{
+                    textAlign: 'center',
+                    padding: '32px 12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ fontSize: 22 }}>💼</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>No open positions</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', maxWidth: 200, lineHeight: 1.4 }}>
+                    Buy any token in the terminal to track your bags here.
+                  </div>
+                </div>
+              ) : (
+                Object.values(positions).map((pos) => {
+                  const isSelected = pos.mint === mint;
+                  const posPrice = isSelected && price > 0
+                    ? price
+                    : (positionPrices[pos.mint] || pos.entryPrice);
+                  const posValUsd = pos.tokens * posPrice;
+                  const posValSol = posValUsd / (solPriceUsd || 150);
+                  const posPnlUsd = posValUsd - pos.investedUsd;
+                  const posPnlSol = posPnlUsd / (solPriceUsd || 150);
+                  const posPnlPct = pos.investedUsd > 0 ? (posPnlUsd / pos.investedUsd) * 100 : 0;
+                  const isProfit = posPnlUsd >= 0;
+
+                  return (
+                    <div
+                      key={pos.mint}
+                      style={{
+                        padding: '8px 10px',
+                        background: isSelected ? 'rgba(0, 245, 155, 0.04)' : 'rgba(255, 255, 255, 0.02)',
+                        border: `1px solid ${isSelected ? 'rgba(0, 245, 155, 0.25)' : 'rgba(255, 255, 255, 0.06)'}`,
+                        borderRadius: 8,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                      }}
+                    >
+                      {/* Token Header Row */}
+                      <div
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', cursor: 'pointer' }}
+                        onClick={() => {
+                          if (pos.mint !== mint) setMint(pos.mint);
+                          closePositionsPopup();
+                        }}
+                        data-tooltip="View in Trading Terminal"
+                        data-tooltip-sub={`Load $${pos.symbol} chart and order controls`}
+                        data-tooltip-pos="top"
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <span style={{ fontWeight: 800, fontSize: 12, color: '#fff' }}>${pos.symbol}</span>
+                            {isSelected && (
+                              <span style={{ fontSize: 8, padding: '1px 4px', borderRadius: 3, background: 'rgba(0, 245, 155, 0.15)', color: 'var(--accent-green)', fontWeight: 700 }}>
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                            {formatTokens(pos.tokens)} · Entry {formatPrice(pos.entryPrice)}
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: 'right' }}>
+                          <div className="mono" style={{ fontSize: 11.5, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                            <img
+                              src="https://axiom-assets-v2.axiom-cdn.io/images/sol-fill.svg"
+                              alt="SOL"
+                              style={{ width: 9, height: 9 }}
+                            />
+                            <span>{posValSol.toFixed(3)}</span>
+                          </div>
+                          <div
+                            className="mono"
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 700,
+                              color: isProfit ? 'var(--accent-green)' : 'var(--accent-red)',
+                              marginTop: 1,
+                            }}
+                          >
+                            {isProfit ? '+' : ''}{posPnlSol.toFixed(3)} ({isProfit ? '+' : ''}{posPnlPct.toFixed(1)}%)
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick Sell Controls */}
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        {[25, 50, 100].map((pct) => (
+                          <button
+                            key={pct}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              executeSellForBag(pos, pct);
+                            }}
+                            className="btn-preset-sell mono"
+                            style={{ flex: 1, padding: '4px 2px', fontSize: 9.5, fontWeight: 700 }}
+                            data-tooltip={`Sell ${pct}% of ${pos.symbol}`}
+                            data-tooltip-pos="top"
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            executeSellInitialForBag(pos);
+                          }}
+                          disabled={pos.investedUsd <= 0}
+                          style={{
+                            background: 'rgba(255, 149, 0, 0.08)',
+                            border: '1px solid rgba(255, 149, 0, 0.25)',
+                            color: 'var(--accent-orange)',
+                            borderRadius: 6,
+                            fontSize: 9.5,
+                            fontWeight: 700,
+                            padding: '4px 6px',
+                            cursor: pos.investedUsd <= 0 ? 'not-allowed' : 'pointer',
+                            opacity: pos.investedUsd <= 0 ? 0.35 : 1,
+                            whiteSpace: 'nowrap',
+                          }}
+                          data-tooltip="Sell Initial Investment"
+                          data-tooltip-sub="Realize invested capital and hold the remainder risk-free"
+                          data-tooltip-pos="top"
+                        >
+                          Initial
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 11. FLOATING BOTTOM-RIGHT TOAST NOTIFICATION POPUP WITH TIMER LINE */}
       {toastNotification && (
         <div
           onMouseEnter={handleToastMouseEnter}
           onMouseLeave={handleToastMouseLeave}
           style={{
             position: 'fixed',
-            bottom: activeTab !== 'TRADE' ? 440 : 58,
+            bottom: activeTab === 'TRADE' ? 118 : 58,
             right: 12,
             maxWidth: 320,
             minWidth: 220,
@@ -5589,7 +5440,8 @@ export function App() {
 
             <button
               onClick={closeToast}
-              title="Dismiss"
+              data-tooltip="Dismiss"
+              data-tooltip-pos="left"
               aria-label="Dismiss"
               style={{
                 background: 'transparent',
@@ -5634,6 +5486,412 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* FLOATING FILLS MODAL */}
+      {fillsModalMint && (() => {
+        const modalItem = groupedTrades.find((g) => g.mint === fillsModalMint);
+        if (!modalItem) return null;
+
+        const modalPos = positions[modalItem.mint];
+        const modalHoldingTokens = modalPos?.tokens || 0;
+        const isModalSelected = modalItem.mint === mint;
+        const modalUnrealizedPnl = modalHoldingTokens > 0 && isModalSelected && price > 0
+          ? (modalHoldingTokens * price) - (modalPos?.investedUsd || 0)
+          : 0;
+        const modalTotalPnl = modalItem.realizedPnl + modalUnrealizedPnl;
+        const modalPnlColor = modalTotalPnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+        const modalPnlSign = modalTotalPnl >= 0 ? '+' : '';
+
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.75)',
+              backdropFilter: 'blur(3px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 100,
+              padding: 16,
+            }}
+            onClick={() => setFillsModalMint(null)}
+          >
+            <div
+              style={{
+                width: '100%',
+                maxWidth: 350,
+                background: 'linear-gradient(180deg, #131722 0%, #0c0e15 100%)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.04)',
+                borderRadius: 14,
+                padding: 16,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+                animation: 'fadeIn 0.15s ease',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header: Padre.gg Token Hero & Top-Right Actions */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  <img
+                    src={`https://axiomtrading-v2.axiom-cdn.io/${modalItem.mint}.webp`}
+                    alt={modalItem.symbol}
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 10,
+                      objectFit: 'cover',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      flexShrink: 0,
+                    }}
+                    onError={(e: any) => {
+                      const target = e.target as HTMLImageElement;
+                      const cdnFallback = `https://cdn.dexscreener.com/token-images/og/solana/${modalItem.mint}`;
+                      if (target.src !== cdnFallback) target.src = cdnFallback;
+                      else target.style.display = 'none';
+                    }}
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 16, fontWeight: 900, color: '#fff', letterSpacing: '-0.3px' }}>
+                        ${modalItem.symbol}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          color: 'var(--text-secondary)',
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        {modalItem.mint.slice(0, 4)}...{modalItem.mint.slice(-4)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                      Trade Fill Analytics
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top-Right Action Controls: Share Stats + Close */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <button
+                    onClick={() => {
+                      const buyTrades = modalItem.trades.filter((t) => t.type === 'BUY');
+                      const sellTrades = modalItem.trades.filter((t) => t.type === 'SELL');
+                      const firstBuyTime = buyTrades.length > 0
+                        ? Math.min(...buyTrades.map((t) => t.timestamp))
+                        : modalItem.trades.length > 0
+                        ? Math.max(...modalItem.trades.map((t) => t.timestamp))
+                        : 0;
+                      const lastSellTime = sellTrades.length > 0
+                        ? Math.max(...sellTrades.map((t) => t.timestamp))
+                        : modalItem.trades.length > 0
+                        ? Math.max(...modalItem.trades.map((t) => t.timestamp))
+                        : 0;
+
+                      setShareModalData({
+                        mint: modalItem.mint,
+                        symbol: modalItem.symbol,
+                        totalBoughtUsd: modalItem.totalBoughtUsd,
+                        totalBoughtTokens: modalItem.totalBoughtTokens,
+                        totalSoldUsd: modalItem.totalSoldUsd,
+                        totalSoldTokens: modalItem.totalSoldTokens,
+                        realizedPnl: modalItem.realizedPnl,
+                        totalPnl: modalTotalPnl,
+                        holdingTokens: modalHoldingTokens,
+                        holdingUsd: modalPos ? modalPos.investedUsd : 0,
+                        solPriceUsd: solPriceUsd || 150,
+                        firstBuyTimestamp: firstBuyTime,
+                        lastSellTimestamp: lastSellTime,
+                      });
+                    }}
+                    data-tooltip="Share Stats Card"
+                    data-tooltip-sub="Generate sleek shareable PnL card"
+                    data-tooltip-pos="bottom"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      padding: '5px 10px',
+                      background: 'rgba(0, 245, 155, 0.12)',
+                      border: '1px solid rgba(0, 245, 155, 0.3)',
+                      borderRadius: 7,
+                      color: 'var(--accent-green)',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e: any) => {
+                      e.currentTarget.style.background = 'rgba(0, 245, 155, 0.2)';
+                    }}
+                    onMouseLeave={(e: any) => {
+                      e.currentTarget.style.background = 'rgba(0, 245, 155, 0.12)';
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                      <polyline points="16 6 12 2 8 6" />
+                      <line x1="12" y1="2" x2="12" y2="15" />
+                    </svg>
+                    <span>Share</span>
+                  </button>
+
+                  <button
+                    onClick={() => setFillsModalMint(null)}
+                    data-tooltip="Close Modal"
+                    data-tooltip-pos="bottom"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 26,
+                      height: 26,
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: 7,
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e: any) => {
+                      e.currentTarget.style.color = '#fff';
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                    }}
+                    onMouseLeave={(e: any) => {
+                      e.currentTarget.style.color = 'var(--text-secondary)';
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Summary Metric Ribbon: Padre / Pumpfun Glow Card */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  background: 'rgba(0, 0, 0, 0.45)',
+                  borderRadius: 10,
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  padding: '10px 4px',
+                  textAlign: 'center',
+                }}
+              >
+                {/* Bought */}
+                <div style={{ borderRight: '1px solid rgba(255, 255, 255, 0.06)', padding: '0 4px' }}>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Bought</div>
+                  <div className="mono" style={{ fontWeight: 800, fontSize: 12, color: 'var(--accent-green)', marginTop: 2 }}>
+                    ${modalItem.totalBoughtUsd.toFixed(1)}
+                  </div>
+                  <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 1 }}>
+                    {formatTokens(modalItem.totalBoughtTokens)}
+                  </div>
+                </div>
+
+                {/* Sold */}
+                <div style={{ borderRight: '1px solid rgba(255, 255, 255, 0.06)', padding: '0 4px' }}>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Sold</div>
+                  <div className="mono" style={{ fontWeight: 800, fontSize: 12, color: 'var(--accent-red)', marginTop: 2 }}>
+                    ${modalItem.totalSoldUsd.toFixed(1)}
+                  </div>
+                  <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 1 }}>
+                    {formatTokens(modalItem.totalSoldTokens)}
+                  </div>
+                </div>
+
+                {/* Holding */}
+                <div style={{ borderRight: '1px solid rgba(255, 255, 255, 0.06)', padding: '0 4px' }}>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Holding</div>
+                  <div className="mono" style={{ fontWeight: 800, fontSize: 12, color: modalHoldingTokens > 0 ? '#fff' : 'var(--text-muted)', marginTop: 2 }}>
+                    {formatTokens(modalHoldingTokens)}
+                  </div>
+                  <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 1 }}>
+                    {modalPos ? `$${modalPos.investedUsd.toFixed(1)}` : '$0'}
+                  </div>
+                </div>
+
+                {/* PnL */}
+                <div style={{ padding: '0 4px' }}>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>PnL</div>
+                  <div className="mono" style={{ fontWeight: 800, fontSize: 12, color: modalPnlColor, marginTop: 2 }}>
+                    {modalPnlSign}${modalTotalPnl.toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: 8, color: modalPnlColor, marginTop: 1, fontWeight: 700 }}>
+                    {modalItem.totalBoughtUsd > 0
+                      ? `${modalPnlSign}${((modalTotalPnl / modalItem.totalBoughtUsd) * 100).toFixed(1)}%`
+                      : '0%'}
+                  </div>
+                </div>
+              </div>
+
+              {/* List of Individual Fills */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
+                  <span>Order Book History</span>
+                  <span style={{ fontFamily: 'monospace' }}>{modalItem.trades.length} fills</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 180, overflowY: 'auto', paddingRight: 2 }}>
+                  {modalItem.trades.map((t) => (
+                    <div
+                      key={t.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: 11,
+                        padding: '7px 10px',
+                        background: t.type === 'BUY' ? 'rgba(0, 245, 155, 0.03)' : 'rgba(255, 75, 75, 0.03)',
+                        border: `1px solid ${t.type === 'BUY' ? 'rgba(0, 245, 155, 0.12)' : 'rgba(255, 75, 75, 0.12)'}`,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 800,
+                            padding: '1px 5px',
+                            borderRadius: 4,
+                            background: t.type === 'BUY' ? 'rgba(0, 245, 155, 0.15)' : 'rgba(255, 75, 75, 0.15)',
+                            color: t.type === 'BUY' ? 'var(--accent-green)' : 'var(--accent-red)',
+                            letterSpacing: '0.3px',
+                          }}
+                        >
+                          {t.type}
+                        </span>
+                        <span className="mono" style={{ color: 'var(--text-secondary)', fontSize: 10 }}>
+                          {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </span>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div className="mono" style={{ fontWeight: 800, color: '#fff', fontSize: 11 }}>
+                          ${t.amountUsd.toFixed(2)}
+                        </div>
+                        <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 9 }}>
+                          @{formatPrice(t.effectivePrice || t.price)}
+                          {t.priceImpactPct && t.priceImpactPct > 0.05 ? ` (${t.priceImpactPct.toFixed(1)}% imp)` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons: Axiom, DexScreener, Solscan Logos */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', paddingTop: 2 }}>
+                {/* Axiom Button */}
+                <a
+                  href={`https://axiom.trade/meme/${modalItem.mint}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-tooltip="Open on Axiom.trade"
+                  data-tooltip-sub="Trade and view charts on Axiom"
+                  data-tooltip-pos="top"
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '8px 0',
+                    background: 'rgba(0, 245, 155, 0.06)',
+                    border: '1px solid rgba(0, 245, 155, 0.22)',
+                    borderRadius: 8,
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="#00f59b" strokeWidth="2" />
+                    <path d="M12 7L16 16H8L12 7Z" fill="#00f59b" />
+                  </svg>
+                </a>
+
+                {/* DexScreener Button */}
+                <a
+                  href={`https://dexscreener.com/solana/${modalItem.mint}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-tooltip="Open on DexScreener"
+                  data-tooltip-sub="Live candlestick charts & pairs"
+                  data-tooltip-pos="top"
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '8px 0',
+                    background: 'rgba(56, 189, 248, 0.06)',
+                    border: '1px solid rgba(56, 189, 248, 0.22)',
+                    borderRadius: 8,
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M4 14C4 9.58 7.58 6 12 6C16.42 6 20 9.58 20 14V17C20 18.1 19.1 19 18 19H6C4.9 19 4 18.1 4 17V14Z"
+                      stroke="#38bdf8"
+                      strokeWidth="2"
+                    />
+                    <circle cx="9" cy="13" r="1.5" fill="#38bdf8" />
+                    <circle cx="15" cy="13" r="1.5" fill="#38bdf8" />
+                    <path d="M11 16H13" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </a>
+
+                {/* Solscan Button */}
+                <a
+                  href={`https://solscan.io/token/${modalItem.mint}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-tooltip="Open on Solscan Explorer"
+                  data-tooltip-sub={`Inspect mint ${modalItem.mint.slice(0, 4)}...${modalItem.mint.slice(-4)}`}
+                  data-tooltip-pos="top"
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '8px 0',
+                    background: 'rgba(168, 85, 247, 0.06)',
+                    border: '1px solid rgba(168, 85, 247, 0.22)',
+                    borderRadius: 8,
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <circle cx="11" cy="11" r="7" stroke="#a855f7" strokeWidth="2" />
+                    <path d="M16.5 16.5L20.5 20.5" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M9 11C9 9.89 9.89 9 11 9" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Share PnL Card Modal */}
       {shareModalData && (
