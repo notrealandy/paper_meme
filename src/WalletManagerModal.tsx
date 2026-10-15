@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 
 export interface WalletPosition {
   mint: string;
@@ -80,8 +80,24 @@ export function WalletManagerModal({
   const [newWalletName, setNewWalletName] = useState<string>('');
   const [newWalletBalance, setNewWalletBalance] = useState<string>('10');
   const [copiedAddrId, setCopiedAddrId] = useState<string | null>(null);
+  const [isClosing, setIsClosing] = useState<boolean>(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (isOpen) {
+      setIsClosing(false);
+    }
+  }, [isOpen]);
+
+  if (!isOpen && !isClosing) return null;
+
+  const handleClose = () => {
+    if (isClosing) return;
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 180);
+  };
 
   const solRate = solPriceUsd || 150;
 
@@ -118,59 +134,69 @@ export function WalletManagerModal({
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(3px)',
-        zIndex: 150,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-      }}
-      onClick={onClose}
-    >
+    <>
+      <div
+        onClick={handleClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 148,
+          background: 'rgba(0, 0, 0, 0.35)',
+          animation: `${isClosing ? 'popupBackdropOut' : 'popupBackdropIn'} 0.18s ease forwards`,
+        }}
+      />
+
       <div
         style={{
-          width: '100%',
-          maxWidth: 360,
-          background: 'linear-gradient(180deg, #131722 0%, #0c0e15 100%)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.04)',
-          borderRadius: 14,
-          padding: 14,
+          position: 'fixed',
+          top: 44,
+          left: 12,
+          right: 12,
+          maxHeight: 'min(500px, calc(100vh - 60px))',
+          background: 'rgba(13, 16, 24, 0.98)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          borderRadius: 12,
+          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.75), 0 0 20px rgba(0, 245, 155, 0.08)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 12,
-          animation: 'fadeIn 0.15s ease',
+          zIndex: 149,
+          transformOrigin: 'top right',
+          animation: `${isClosing ? 'popupOutTopRight 0.18s cubic-bezier(0.16, 1, 0.3, 1)' : 'popupInTopRight 0.22s cubic-bezier(0.16, 1, 0.3, 1)'} forwards`,
+          overflow: 'hidden',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent-green)' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 12px',
+            background: 'rgba(255, 255, 255, 0.03)',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent-green)' }}>
               <rect x="2" y="5" width="20" height="14" rx="3" />
               <line x1="2" y1="10" x2="22" y2="10" />
               <circle cx="17" cy="14" r="1.5" fill="currentColor" />
             </svg>
-            <span style={{ fontSize: 13, fontWeight: 800, color: '#fff', letterSpacing: '-0.2px' }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
               Wallets
             </span>
             <span
+              className="mono"
               style={{
                 fontSize: 9.5,
-                fontWeight: 700,
+                fontWeight: 800,
                 padding: '1px 6px',
-                borderRadius: 4,
-                background: 'rgba(255, 255, 255, 0.06)',
-                color: 'var(--text-secondary)',
-                fontFamily: 'monospace',
+                borderRadius: 10,
+                background: 'rgba(0, 245, 155, 0.15)',
+                color: 'var(--accent-green)',
               }}
             >
               {wallets.length}
@@ -184,7 +210,7 @@ export function WalletManagerModal({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 4,
-                padding: '4px 8px',
+                padding: '3px 8px',
                 background: showCreateForm ? 'rgba(0, 245, 155, 0.2)' : 'rgba(0, 245, 155, 0.1)',
                 border: '1px solid rgba(0, 245, 155, 0.3)',
                 borderRadius: 6,
@@ -195,7 +221,7 @@ export function WalletManagerModal({
                 transition: 'all 0.15s ease',
               }}
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
@@ -203,29 +229,41 @@ export function WalletManagerModal({
             </button>
 
             <button
-              onClick={onClose}
-              data-tooltip="Close Modal"
+              onClick={handleClose}
+              data-tooltip="Close"
               data-tooltip-pos="bottom"
               style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                padding: 2,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 24,
-                height: 24,
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 6,
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
               }}
+              onMouseEnter={(e: any) => (e.currentTarget.style.color = '#fff')}
+              onMouseLeave={(e: any) => (e.currentTarget.style.color = 'var(--text-muted)')}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           </div>
         </div>
+
+        {/* Scrollable Content */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '10px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
 
         {/* Create Wallet Inline Drawer */}
         {showCreateForm && (
@@ -328,9 +366,6 @@ export function WalletManagerModal({
             display: 'flex',
             flexDirection: 'column',
             gap: 6,
-            maxHeight: 280,
-            overflowY: 'auto',
-            paddingRight: 2,
           }}
         >
           {wallets.map((w) => {
@@ -586,95 +621,97 @@ export function WalletManagerModal({
             );
           })}
         </div>
+      </div>
 
-        {/* Footer: Import & Export Controls */}
-        <div
+      {/* Footer: Import & Export Controls */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          padding: '10px 12px',
+          background: 'rgba(255, 255, 255, 0.02)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.07)',
+        }}
+      >
+        {/* Export All Backup */}
+        <button
+          onClick={onExportAll}
+          data-tooltip="Export All Wallets"
+          data-tooltip-sub="Download full JSON backup of all wallets & balances"
+          data-tooltip-pos="top"
           style={{
+            flex: 1,
             display: 'flex',
-            gap: 8,
-            paddingTop: 8,
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 5,
+            padding: '7px 0',
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: 7,
+            color: 'var(--text-secondary)',
+            fontSize: 10.5,
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e: any) => {
+            e.currentTarget.style.color = '#fff';
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+          }}
+          onMouseLeave={(e: any) => {
+            e.currentTarget.style.color = 'var(--text-secondary)';
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
           }}
         >
-          {/* Export All Backup */}
-          <button
-            onClick={onExportAll}
-            data-tooltip="Export All Wallets"
-            data-tooltip-sub="Download full JSON backup of all wallets & balances"
-            data-tooltip-pos="top"
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 5,
-              padding: '7px 0',
-              background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: 7,
-              color: 'var(--text-secondary)',
-              fontSize: 10.5,
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e: any) => {
-              e.currentTarget.style.color = '#fff';
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-            }}
-            onMouseLeave={(e: any) => {
-              e.currentTarget.style.color = 'var(--text-secondary)';
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            <span>Export Backup</span>
-          </button>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span>Export Backup</span>
+        </button>
 
-          {/* Import Wallet Button */}
-          <label
-            data-tooltip="Import Wallet Backup"
-            data-tooltip-sub="Upload wallet JSON backup file"
-            data-tooltip-pos="top"
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 5,
-              padding: '7px 0',
-              background: 'rgba(0, 245, 155, 0.08)',
-              border: '1px solid rgba(0, 245, 155, 0.25)',
-              borderRadius: 7,
-              color: 'var(--accent-green)',
-              fontSize: 10.5,
-              fontWeight: 700,
-              cursor: 'pointer',
-              margin: 0,
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e: any) => (e.currentTarget.style.background = 'rgba(0, 245, 155, 0.14)')}
-            onMouseLeave={(e: any) => (e.currentTarget.style.background = 'rgba(0, 245, 155, 0.08)')}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <span>Import Wallet</span>
-            <input
-              type="file"
-              accept=".json,application/json"
-              onChange={onImportFile}
-              style={{ display: 'none' }}
-            />
-          </label>
-        </div>
+        {/* Import Wallet Button */}
+        <label
+          data-tooltip="Import Wallet Backup"
+          data-tooltip-sub="Upload wallet JSON backup file"
+          data-tooltip-pos="top"
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 5,
+            padding: '7px 0',
+            background: 'rgba(0, 245, 155, 0.08)',
+            border: '1px solid rgba(0, 245, 155, 0.25)',
+            borderRadius: 7,
+            color: 'var(--accent-green)',
+            fontSize: 10.5,
+            fontWeight: 700,
+            cursor: 'pointer',
+            margin: 0,
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e: any) => (e.currentTarget.style.background = 'rgba(0, 245, 155, 0.14)')}
+          onMouseLeave={(e: any) => (e.currentTarget.style.background = 'rgba(0, 245, 155, 0.08)')}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          <span>Import Wallet</span>
+          <input
+            type="file"
+            accept=".json,application/json"
+            onChange={onImportFile}
+            style={{ display: 'none' }}
+          />
+        </label>
       </div>
     </div>
-  );
+  </>
+);
 }

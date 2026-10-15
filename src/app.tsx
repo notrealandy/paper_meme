@@ -2396,10 +2396,9 @@ export function App() {
               fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 5,
               cursor: 'pointer',
               transition: 'all 0.15s ease',
-              maxWidth: 160,
             }}
           >
             {/* Wallet Icon */}
@@ -2408,26 +2407,23 @@ export function App() {
               <line x1="2" y1="10" x2="22" y2="10" />
               <circle cx="17" cy="14" r="1.5" fill="currentColor" />
             </svg>
-            <span
-              style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                maxWidth: 75,
-              }}
-            >
-              {activeWallet?.name || 'Wallet'}
-            </span>
+            {/* Solana Logo & Balance */}
+            <img
+              src="https://axiom-assets-v2.axiom-cdn.io/images/sol-fill.svg"
+              alt="SOL"
+              style={{ width: 11, height: 11, flexShrink: 0, display: 'block' }}
+            />
             <span
               className="mono"
               style={{
-                color: 'var(--accent-cyan)',
-                fontSize: 10,
+                color: '#fff',
+                fontSize: 10.5,
                 fontWeight: 700,
+                letterSpacing: '-0.2px',
                 flexShrink: 0,
               }}
             >
-              {(activeWallet?.balance ?? balance).toFixed(1)}S
+              {(activeWallet?.balance ?? balance).toFixed(2)}
             </span>
             <svg
               width="9"
@@ -2439,6 +2435,7 @@ export function App() {
               strokeLinecap="round"
               strokeLinejoin="round"
               style={{
+                marginLeft: 3,
                 flexShrink: 0,
                 transform: showWalletManager ? 'rotate(180deg)' : 'none',
                 transition: 'transform 0.15s ease',
